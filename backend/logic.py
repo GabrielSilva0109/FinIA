@@ -1,83 +1,104 @@
 import yfinance as yf
-import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import r2_score
 
 def analyze(ticker):
     try:
         dados = yf.download(ticker, period="180d", interval="1d")
+
         if dados.empty:
             return {"erro": "Ticker inválido ou sem dados"}
 
-        dados.dropna(inplace=True)
-        dados['Dias'] = np.arange(len(dados))
-        dados['MM20'] = dados['Close'].rolling(window=20).mean()
+        volume_medio = dados['Volume'].mean()
+        if isinstance(volume_medio, (float, int)) and volume_medio < 10000:
+            return {"erro": "Volume médio muito baixo, ação com pouca liquidez"}
 
-        features = ['Dias', 'Volume', 'High', 'Low', 'Open']
-        X = dados[features].copy()
-        y = dados['Close'].values.ravel()
+        features = dados[['Open', 'High', 'Low', 'Volume']].copy()
+        features.fillna(0, inplace=True)
 
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X.values)  # <-- aqui
+        minimos = features.min()
+        maximos = features.max()
+        denominador = maximos - minimos
+        denominador[denominador == 0] = 1
+
+        features_normalizadas = (features - minimos) / denominador
+
+        precos = dados['Close'].values
 
         modelo = LinearRegression()
-        modelo.fit(X_scaled, y)
+        modelo.fit(features_normalizadas, precos)
 
-        novo_dia = pd.DataFrame([{
-            'Dias': len(dados),
-            'Volume': dados['Volume'].iloc[-1],
-            'High': dados['High'].iloc[-1],
-            'Low': dados['Low'].iloc[-1],
-            'Open': dados['Open'].iloc[-1]
-        }])
-        novo_dia_scaled = scaler.transform(novo_dia.values)  # <-- aqui
+        r2 = modelo.score(features_normalizadas, precos) 
 
-        r2 = float(r2_score(y, modelo.predict(X_scaled)))
+        ultima_linha = features_normalizadas.iloc[-1].values.reshape(1, -1)
+        previsao = float(modelo.predict(ultima_linha)[0])
 
-        previsao = float(modelo.predict(novo_dia_scaled).item())
-        ultimo_preco = dados['Close'].iloc[-1].item()  # <-- aqui
+        ultimo_preco = float(dados['Close'].iloc[-1])
 
         tendencia = "alta" if previsao > ultimo_preco else "baixa"
 
-        volatilidade = dados['Close'].pct_change().std() * 100
-        if volatilidade > 3:
-            risco = "alto"
-        elif volatilidade > 1.5:
-            risco = "moderado"
-        else:
-            risco = "baixo"
-
-        mm20_valor = dados['MM20'].iloc[-1]
-        media_movel_20d = round(float(mm20_valor), 2) if not pd.isna(mm20_valor) else None
+        r2_formatado = f"{r2 * 100:,.2f}".replace('.', ',') + '%'
 
         return {
-            "ticker": ticker.upper(),
+            "ticker": ticker,
             "preco_atual": round(ultimo_preco, 2),
             "previsao_proximo_dia": round(previsao, 2),
             "tendencia": tendencia,
-            "precisao_modelo_r2": round(r2, 3),
-            "media_movel_20d": media_movel_20d,
-            "volatilidade_%": round(volatilidade, 2),
-            "classificacao_risco": risco,
-            "estrategia": gerar_estrategia(tendencia, risco)
+            "confianca_modelo_r2": r2_formatado,
+            "estrategia": gerar_estrategia(tendencia)
         }
 
     except Exception as e:
         return {"erro": str(e)}
 
-
-def gerar_estrategia(tendencia, risco):
+def gerar_estrategia(tendencia):
     if tendencia == "alta":
-        if risco == "baixo":
-            return "Tendência de alta com baixo risco. Boa oportunidade de compra 📈✅"
-        elif risco == "moderado":
-            return "Alta com risco moderado. Avalie sua estratégia antes de comprar 📈⚠️"
-        else:
-            return "Alta com risco alto. Cuidado com volatilidade 📈⚠️"
+        return "Considere manter ou comprar mais, a tendência é de valorização 📈"
     else:
-        if risco == "alto":
-            return "Tendência de baixa e risco alto. Melhor evitar por enquanto 📉🚫"
-        else:
-            return "Tendência de baixa. Aguardar pode ser melhor 📉"
+        return "Considere vender ou aguardar nova entrada, tendência de queda 📉"
+
+
+if __name__ == "__main__":
+
+    print(analyze("AAPL"))
+
+
+
+# import yfinance as yf
+# import pandas as pd
+# from sklearn.linear_model import LinearRegression
+# import numpy as np
+
+# def analyze(ticker):
+#     try:
+#         dados = yf.download(ticker, period="180d", interval="1d")
+#         if dados.empty:
+#             return {"erro": "Ticker inválido ou sem dados"}
+
+#         dias = np.arange(len(dados)).reshape(-1, 1)
+#         precos = dados['Close'].values.reshape(-1)
+
+#         modelo = LinearRegression()
+#         modelo.fit(dias, precos)
+
+#         previsao = float(modelo.predict(np.array([[len(dados)]]))[0])
+#         ultimo_preco = float(dados['Close'].iloc[-1])
+
+#         tendencia = "alta" if previsao > ultimo_preco else "baixa"
+
+#         return {
+#             "ticker": ticker,
+#             "preco_atual": round(ultimo_preco, 2),
+#             "previsao_proximo_dia": round(previsao, 2),
+#             "tendencia": tendencia,
+#             "estrategia": gerar_estrategia(tendencia)
+#         }
+
+#     except Exception as e:
+#         return {"erro": str(e)}
+
+# def gerar_estrategia(tendencia):
+#     if tendencia == "alta":
+#         return "Considere manter ou comprar mais, a tendência é de valorização 📈"
+#     else:
+#         return "Considere vender ou aguardar nova entrada, tendência de queda 📉"
