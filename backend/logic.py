@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 import numpy as np
 
-def analisar_acao(ticker):
+def analyze(ticker):
     try:
         dados = yf.download(ticker, period="60d", interval="1d")
         if dados.empty:
