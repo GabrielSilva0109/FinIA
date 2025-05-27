@@ -9,12 +9,14 @@ def analisar_acao(ticker):
         if dados.empty:
             return {"erro": "Ticker inválido ou sem dados"}
 
-        dados['Dias'] = np.arange(len(dados)).reshape(-1, 1)
-        modelo = LinearRegression()
-        modelo.fit(dados['Dias'], dados['Close'])
+        dias = np.arange(len(dados)).reshape(-1, 1)
+        precos = dados['Close'].values.reshape(-1)
 
-        previsao = modelo.predict([[len(dados)]])[0]
-        ultimo_preco = dados['Close'].iloc[-1]
+        modelo = LinearRegression()
+        modelo.fit(dias, precos)
+
+        previsao = float(modelo.predict(np.array([[len(dados)]]))[0])
+        ultimo_preco = float(dados['Close'].iloc[-1])
 
         tendencia = "alta" if previsao > ultimo_preco else "baixa"
 
