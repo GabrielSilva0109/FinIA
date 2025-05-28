@@ -4,6 +4,31 @@ from sklearn.linear_model import LinearRegression
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import requests
 from bs4 import BeautifulSoup
+import re
+
+def compute_technical_indicators(df):
+    df['retorno'] = df['Close'].pct_change()
+    df['MA7'] = df['Close'].rolling(window=7).mean()
+    df['MA20'] = df['Close'].rolling(window=20).mean()
+    df['RSI'] = compute_rsi(df['Close'])
+    df['volatilidade'] = df['retorno'].rolling(window=7).std()
+    df = df.dropna()
+    return df
+
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+def compute_macd(df, short=12, long=26, signal=9):
+    exp1 = df['Close'].ewm(span=short, adjust=False).mean()
+    exp2 = df['Close'].ewm(span=long, adjust=False).mean()
+    macd = exp1 - exp2
+    signal_line = macd.ewm(span=signal, adjust=False).mean()
+    return macd, signal_line
 
 def analyze(ticker):
     try:
@@ -16,11 +41,22 @@ def analyze(ticker):
         if isinstance(volume_medio, (float, int)) and volume_medio < 10000:
             return {"erro": "Volume médio muito baixo, ação com pouca liquidez"}
 
-        # Médias móveis
+        # Indicadores técnicos
+        dados['retorno'] = dados['Close'].pct_change()
+        dados['MA7'] = dados['Close'].rolling(window=7).mean()
+        dados['MA20'] = dados['Close'].rolling(window=20).mean()
+        dados['EMA12'] = dados['Close'].ewm(span=12, adjust=False).mean()
+        dados['EMA26'] = dados['Close'].ewm(span=26, adjust=False).mean()
+        dados['RSI'] = compute_rsi(dados['Close'])
+        dados['MACD'], dados['MACD_Signal'] = compute_macd(dados)
+        dados['volatilidade'] = dados['retorno'].rolling(window=7).std()
+
+        dados = dados.dropna()
+
+        # Médias móveis adicionais
         dados['SMA_7'] = dados['Close'].rolling(window=7).mean()
         dados['SMA_15'] = dados['Close'].rolling(window=15).mean()
         dados['SMA_30'] = dados['Close'].rolling(window=30).mean()
-
         media_movel_7 = dados['SMA_7'].iloc[-1]
         media_movel_15 = dados['SMA_15'].iloc[-1]
         media_movel_30 = dados['SMA_30'].iloc[-1]
@@ -66,10 +102,11 @@ def analyze(ticker):
         return {
             "ticker": ticker,
             "preco_atual": round(ultimo_preco, 2),
-            "previsao_proximo_dia": round(previsao, 2),
+            "previsao": round(previsao, 2),
             "media_movel_7": round(media_movel_7, 2) if media_movel_7 is not None else None,
             "media_movel_15": round(media_movel_15, 2) if media_movel_15 is not None else None,
             "media_movel_30": round(media_movel_30, 2) if media_movel_30 is not None else None,
+            "diferenca": round(previsao - ultimo_preco, 2),
             "volatilidade": f"{volatilidade*100:.2f}%",
             "tendencia": tendencia,
             "confianca_modelo_r2": f"{r2:.2f}%",
@@ -145,7 +182,7 @@ def gerar_estrategia(tendencia):
         return "Considere manter ou comprar mais, a tendência é de valorização 📈"
     else:
         return "Considere vender ou aguardar nova entrada, tendência de queda 📉"
-    
+
 def analyze_all():
     try:
         # Fallback para pegar as ações do Ibovespa via scraping
@@ -173,13 +210,19 @@ def analyze_all():
                 continue
 
             preco_atual = resultado["preco_atual"]
-            previsao = resultado["previsao_proximo_dia"]
+            previsao = resultado["previsao"]
             diferenca = previsao - preco_atual
+            media_movel_7 = resultado["media_movel_7"]
+            media_movel_15 = resultado["media_movel_15"]
+            media_movel_30 = resultado["media_movel_30"]
 
             resultados.append({
                 "ticker": ticker,
                 "preco_atual": preco_atual,
                 "previsao": previsao,
+                "media_movel_7": media_movel_7,
+                "media_movel_15": media_movel_15,
+                "media_movel_30": media_movel_30,
                 "diferenca": diferenca,
                 "tendencia": resultado["tendencia"],
                 "confianca_modelo_r2": resultado["confianca_modelo_r2"],
