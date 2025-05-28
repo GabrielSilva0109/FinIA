@@ -1,27 +1,33 @@
 import yfinance as yf
 import numpy as np
+import pandas as pd
 from sklearn.linear_model import LinearRegression
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import requests
 from bs4 import BeautifulSoup
 import re
+from transformers import pipeline
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from xgboost import XGBRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error
+import logging
+
+# Configuração básica de logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def compute_technical_indicators(df):
     df['retorno'] = df['Close'].pct_change()
     df['MA7'] = df['Close'].rolling(window=7).mean()
     df['MA20'] = df['Close'].rolling(window=20).mean()
+    df['SMA_30'] = df['Close'].rolling(window=30).mean()
     df['RSI'] = compute_rsi(df['Close'])
+    df['MACD'], df['MACD_Signal'] = compute_macd(df)
     df['volatilidade'] = df['retorno'].rolling(window=7).std()
+    df['Volume'] = df['Volume'].astype(float)
     df = df.dropna()
     return df
-
-def compute_rsi(series, period=14):
-    delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
 
 def compute_macd(df, short=12, long=26, signal=9):
     exp1 = df['Close'].ewm(span=short, adjust=False).mean()
@@ -50,174 +56,344 @@ def compute_adx(df, period=14):
     tr3 = (low - close.shift(1)).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
 
-    atr = tr.rolling(window=period).mean()
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    
+    # Evitar divisão por zero
+    rs = np.where(loss != 0, gain / loss, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-    plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr)
-    minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr)
+def compute_additional_indicators(df):
+    # Bollinger Bands
+    df['BB_upper'], df['BB_middle'], df['BB_lower'] = compute_bollinger_bands(df['Close'])
+    
+    # Stochastic Oscillator
+    df['%K'], df['%D'] = compute_stochastic_oscillator(df)
+    
+    # Volume Weighted Average Price
+    df['VWAP'] = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
+    
+    # ATR (Average True Range)
+    df['ATR'] = compute_atr(df)
+    
+    return df.dropna()
 
-    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
-    adx = dx.rolling(window=period).mean()
+def compute_bollinger_bands(price, window=20, num_std=2):
+    rolling_mean = price.rolling(window=window).mean()
+    rolling_std = price.rolling(window=window).std()
+    upper_band = rolling_mean + (rolling_std * num_std)
+    lower_band = rolling_mean - (rolling_std * num_std)
+    return upper_band, rolling_mean, lower_band
 
-    return adx
+def compute_stochastic_oscillator(df, k_window=14, d_window=3):
+    low_min = df['Low'].rolling(window=k_window).min()
+    high_max = df['High'].rolling(window=k_window).max()
+    df['%K'] = 100 * ((df['Close'] - low_min) / (high_max - low_min))
+    df['%D'] = df['%K'].rolling(window=d_window).mean()
+    return df['%K'], df['%D']
 
-def analyze(ticker):
+def compute_atr(df, window=14):
+    high_low = df['High'] - df['Low']
+    high_close = np.abs(df['High'] - df['Close'].shift())
+    low_close = np.abs(df['Low'] - df['Close'].shift())
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr = tr.rolling(window=window).mean()
+    return atr
+
+def enhanced_sentiment_analysis(ticker):
     try:
-        dados = yf.download(ticker, period="180d", interval="1d")
-
-        if dados.empty:
-            return {"erro": "Ticker inválido ou sem dados"}
-
-        volume_medio = dados['Volume'].mean()
-        if isinstance(volume_medio, (float, int)) and volume_medio < 10000:
-            return {"erro": "Volume médio muito baixo, ação com pouca liquidez"}
-
-        # Indicadores técnicos
-        dados['retorno'] = dados['Close'].pct_change()
-        dados['MA7'] = dados['Close'].rolling(window=7).mean()
-        dados['MA20'] = dados['Close'].rolling(window=20).mean()
-        dados['EMA12'] = dados['Close'].ewm(span=12, adjust=False).mean()
-        dados['EMA26'] = dados['Close'].ewm(span=26, adjust=False).mean()
-        dados['RSI'] = compute_rsi(dados['Close'])
-        dados['MACD'], dados['MACD_Signal'] = compute_macd(dados)
-        dados['volatilidade'] = dados['retorno'].rolling(window=7).std()
-
-        dados = dados.dropna()
-
-        # Médias móveis adicionais
-        dados['SMA_7'] = dados['Close'].rolling(window=7).mean()
-        dados['SMA_15'] = dados['Close'].rolling(window=15).mean()
-        dados['SMA_30'] = dados['Close'].rolling(window=30).mean()
-        media_movel_7 = dados['SMA_7'].iloc[-1]
-        media_movel_15 = dados['SMA_15'].iloc[-1]
-        media_movel_30 = dados['SMA_30'].iloc[-1]
-
-        if np.isnan(media_movel_7):
-            media_movel_7 = None
-        if np.isnan(media_movel_15):
-            media_movel_15 = None
-        if np.isnan(media_movel_30):
-            media_movel_30 = None
-
-        # Volatilidade: desvio padrão dos retornos diários (%)
-        dados['retorno_diario'] = dados['Close'].pct_change()
-        volatilidade = dados['retorno_diario'].std()
-
-        # Normalização dos dados para o modelo
-        features = dados[[
-            'Open', 'High', 'Low', 'Volume',
-            'RSI', 'MACD', 'MACD_Signal',
-            'volatilidade', 'SMA_7', 'SMA_15', 'SMA_30'
-        ]].copy()
-
-        features.fillna(0, inplace=True)
-
-        minimos = features.min()
-        maximos = features.max()
-        denominador = maximos - minimos
-        denominador[denominador == 0] = 1
-
-        features_normalizadas = (features - minimos) / denominador
-
-        precos = dados['Close'].values
-
-        modelo = LinearRegression()
-        modelo.fit(features_normalizadas, precos)
-
-        ultima_linha = features_normalizadas.iloc[-1].values.reshape(1, -1)
-        previsao = float(modelo.predict(ultima_linha)[0])
-
-        ultimo_preco = float(dados['Close'].iloc[-1])
-
-        tendencia = "alta" if previsao >= ultimo_preco * 0.995 else "baixa"
-
-        r2 = modelo.score(features_normalizadas, precos) * 100
-
-        sentimento = sentimentAnalysis(ticker)
-
-        return {
-            "ticker": ticker,
-            "preco_atual": round(ultimo_preco, 2),
-            "previsao": round(previsao, 2),
-            "media_movel_7": round(media_movel_7, 2) if media_movel_7 is not None else None,
-            "media_movel_15": round(media_movel_15, 2) if media_movel_15 is not None else None,
-            "media_movel_30": round(media_movel_30, 2) if media_movel_30 is not None else None,
-            "diferenca": round(previsao - ultimo_preco, 2),
-            "volatilidade": f"{volatilidade*100:.2f}%",
-            "tendencia": tendencia,
-            "confianca_modelo_r2": f"{r2:.2f}%",
-            "sentimento": sentimento,
-            "estrategia": gerar_estrategia(tendencia)
-        }
-
-    except Exception as e:
-        return {"erro": str(e)}
-
-def sentimentAnalysis(ticker):
-    try:
-        # Pega nome da empresa pelo yfinance (fallback para ticker sem sufixo)
-        ticker_base = ticker.split('.')[0]
-        try:
-            nome_empresa = yf.Ticker(ticker).info.get('shortName', None)
-        except:
-            nome_empresa = None
-
-        termos_busca = [ticker, ticker_base]
-        if nome_empresa:
-            termos_busca.append(nome_empresa)
-
-        headlines = []
-
-        headers = {"User-Agent": "Mozilla/5.0"}
-
-        for termo in termos_busca:
-            url = f"https://news.google.com/search?q={requests.utils.quote(termo)}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-            response = requests.get(url, headers=headers)
-            soup = BeautifulSoup(response.text, 'html.parser')
-
-            # Tenta capturar vários seletores possíveis para headlines
-            novos_headlines = []
-            for selector in ['article h3', 'article h4', 'div > a > h3']:
-                novos_headlines.extend([h.get_text() for h in soup.select(selector)])
-
-            # Limpa texto: remove urls, espaços extras e caracteres estranhos
-            def limpar_texto(texto):
-                texto = re.sub(r"http\S+", "", texto)
-                texto = re.sub(r"\s+", " ", texto).strip()
-                return texto
-
-            novos_headlines = [limpar_texto(h) for h in novos_headlines if h.strip() != '']
-            headlines.extend(novos_headlines)
-
-        # Remover duplicatas e limitar para, por exemplo, 30 headlines
-        headlines = list(dict.fromkeys(headlines))[:30]
-
-        print(f"Headlines encontradas: {len(headlines)}")
-
-        if not headlines:
+        # Coleta notícias de múltiplas fontes
+        news_sources = [
+            f"https://news.google.com/search?q={ticker}",
+            f"https://www.bloomberg.com/search?query={ticker}",
+            f"https://www.reuters.com/search/news?blob={ticker}"
+        ]
+        
+        all_headlines = []
+        for url in news_sources:
+            try:
+                response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                soup = BeautifulSoup(response.text, 'html.parser')
+                headlines = [h.get_text().strip() for h in soup.find_all(['h1', 'h2', 'h3', 'h4'])]
+                all_headlines.extend(headlines)
+            except:
+                continue
+        
+        if not all_headlines:
             return "neutro"
-
-        analyzer = SentimentIntensityAnalyzer()
-        scores = [analyzer.polarity_scores(headline)['compound'] for headline in headlines]
-
-        media_score = sum(scores) / len(scores)
-
-        if media_score >= 0.05:
+        
+        # Análise com VADER (rápido)
+        vader = SentimentIntensityAnalyzer()
+        vader_scores = [vader.polarity_scores(h)['compound'] for h in all_headlines]
+        vader_avg = sum(vader_scores) / len(vader_scores)
+        
+        # Análise com modelo transformer (mais preciso)
+        sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
+        transformer_results = sentiment_pipeline(all_headlines[:20])  # Limita devido ao tempo de processamento
+        
+        # Combina os resultados
+        final_score = (vader_avg + sum([1 if r['label'] == 'POS' else -1 if r['label'] == 'NEG' else 0 
+                                      for r in transformer_results])/len(transformer_results)) / 2
+        
+        if final_score > 0.1:
+            return "fortemente positivo"
+        elif final_score > 0:
             return "positivo"
-        elif media_score <= -0.05:
+        elif final_score < -0.1:
+            return "fortemente negativo"
+        elif final_score < 0:
             return "negativo"
         else:
             return "neutro"
-
+            
     except Exception as e:
         print(f"Erro na análise de sentimento: {e}")
         return "neutro"
 
-def gerar_estrategia(tendencia):
-    if tendencia == "alta":
-        return "Considere manter ou comprar mais, a tendência é de valorização 📈"
-    else:
-        return "Considere vender ou aguardar nova entrada, tendência de queda 📉"
+def sector_correlation_analysis(ticker):
+    try:
+        stock_info = yf.Ticker(ticker).info
+        sector = stock_info.get('sector', None)
+        
+        if not sector:
+            return None
+            
+        sector_etfs = {
+            "Technology": "XLK",
+            "Financial Services": "XLF",
+            "Healthcare": "XLV",
+            # ... (restante do dicionário)
+        }
+        
+        if sector not in sector_etfs:
+            return None
+            
+        etf_ticker = sector_etfs[sector]
+        stock_data = yf.download(ticker, period="60d", interval="1d", auto_adjust=False)['Close'].pct_change().dropna()
+        etf_data = yf.download(etf_ticker, period="60d", interval="1d", auto_adjust=False)['Close'].pct_change().dropna()
+        
+        # Garantir que temos dados suficientes
+        if len(stock_data) < 2 or len(etf_data) < 2:
+            return None
+            
+        # Ajustar tamanho dos arrays
+        min_len = min(len(stock_data), len(etf_data))
+        stock_data = stock_data[-min_len:]
+        etf_data = etf_data[-min_len:]
+        
+        # Calcular correlação com verificação
+        try:
+            correlation = np.corrcoef(stock_data, etf_data)[0,1]
+            if np.isnan(correlation):
+                return None
+        except:
+            return None
+        
+        return {
+            "sector": sector,
+            "correlation_with_sector": round(correlation, 2),
+            "sector_trend": "alta" if etf_data.mean() > 0 else "baixa"
+        }
+    except:
+        return None
+    
+# Função para calcular indicadores técnicos
+def time_series_validation(df):
+    # Divide os dados em treino (70%), validação (20%) e teste (10%)
+    train_size = int(0.7 * len(df))
+    val_size = int(0.2 * len(df))
+    
+    train = df.iloc[:train_size]
+    val = df.iloc[train_size:train_size+val_size]
+    test = df.iloc[train_size+val_size:]
+    
+    # Treina o modelo
+    model = XGBRegressor()
+    model.fit(train.drop('Close', axis=1), train['Close'])
+    
+    # Avalia no conjunto de validação
+    val_preds = model.predict(val.drop('Close', axis=1))
+    val_mae = mean_absolute_error(val['Close'], val_preds)
+    
+    # Avalia no conjunto de teste (últimos dados)
+    test_preds = model.predict(test.drop('Close', axis=1))
+    test_mae = mean_absolute_error(test['Close'], test_preds)
+    
+    return {
+        "validation_mae": val_mae,
+        "test_mae": test_mae,
+        "model": model
+    }
 
+def generate_smart_alerts(analysis_result):
+    alerts = []
+    
+    # Certifique-se de que estamos comparando valores únicos, não Series
+    rsi = float(analysis_result['RSI'])
+    ma7 = float(analysis_result['MA7'])
+    ma20 = float(analysis_result['MA20'])
+    ma50 = float(analysis_result['MA50'])
+    volume = float(analysis_result['Volume'])
+    avg_volume = float(analysis_result['avg_volume'])
+    tendencia = analysis_result['tendencia']
+    sentimento = analysis_result['sentimento']
+    
+    # Alerta de divergência RSI-preço
+    if rsi > 70 and tendencia == 'alta':
+        alerts.append("Alerta: RSI acima de 70 (sobrecomprado) com tendência de alta - possível correção")
+    elif rsi < 30 and tendencia == 'baixa':
+        alerts.append("Alerta: RSI abaixo de 30 (sobrevendido) com tendência de baixa - possível reversão")
+    
+    # Alerta de cruzamento de médias móveis
+    if ma7 > ma20 > ma50:
+        alerts.append("Tendência de alta: MA7 > MA20 > MA50")
+    elif ma7 < ma20 < ma50:
+        alerts.append("Tendência de baixa: MA7 < MA20 < MA50")
+    
+    # Alerta de volume
+    if volume > 2 * avg_volume:
+        alerts.append(f"Volume alto: {volume/avg_volume:.1f}x a média")
+    
+    # Alerta de sentimento
+    if sentimento == 'fortemente positivo' and tendencia == 'baixa':
+        alerts.append("Divergência: Sentimento fortemente positivo com tendência de baixa")
+    elif sentimento == 'fortemente negativo' and tendencia == 'alta':
+        alerts.append("Divergência: Sentimento fortemente negativo com tendência de alta")
+    
+    return alerts
+
+# Função para calcular indicadores técnicos
+def backtest_strategy(df, initial_capital=10000):
+    signals = []
+    position = 0.0  # Initialize as float
+    capital = float(initial_capital) # Ensure capital is also float
+    portfolio_value = [capital]
+    
+    for i in range(1, len(df)):
+        # Estratégia simples: compra quando RSI < 30 e vende quando RSI > 70
+        if df['RSI'].iloc[i] < 30 and position == 0.0: # Compare with float
+            position = capital / float(df['Close'].iloc[i]) # Explicitly convert to float
+            capital = 0.0
+            signals.append(('buy', df.index[i], df['Close'].iloc[i]))
+        elif df['RSI'].iloc[i] > 70 and position > 0.0: # Compare with float
+            capital = position * float(df['Close'].iloc[i]) # Explicitly convert to float
+            position = 0.0
+            signals.append(('sell', df.index[i], df['Close'].iloc[i]))
+        
+        # Calcula valor do portfólio
+        if position > 0.0: # Compare with float
+            portfolio_value.append(position * float(df['Close'].iloc[i]))
+        else:
+            portfolio_value.append(capital)
+    
+    returns = (portfolio_value[-1] - initial_capital) / initial_capital * 100
+    max_drawdown = compute_drawdown(portfolio_value)
+    
+    return {
+        "final_value": portfolio_value[-1],
+        "return_percent": returns,
+        "max_drawdown": max_drawdown,
+        "signals": signals
+    }
+# Função para calcular indicadores técnicos
+def compute_drawdown(values):
+    peak = values[0]
+    max_dd = 0
+    for value in values:
+        if value > peak:
+            peak = value
+        dd = (peak - value) / peak
+        if dd > max_dd:
+            max_dd = dd
+    return max_dd * 100
+
+def analyze(ticker):
+    try:
+        # Coleta de dados com auto_adjust explícito
+        dados = yf.download(ticker, period="1y", interval="1d", auto_adjust=False)
+        
+        if dados.empty:
+            return {"erro": "Ticker inválido ou sem dados"}
+        
+        # Indicadores técnicos
+        dados = compute_technical_indicators(dados)
+        dados = compute_additional_indicators(dados)
+        
+        # Análise setorial
+        sector_analysis = sector_correlation_analysis(ticker)
+        
+        # Análise de sentimento (com fallback)
+        try:
+            sentiment = enhanced_sentiment_analysis(ticker)
+        except:
+            sentiment = "neutro"
+        
+        # Preparação dos dados para ML
+        features = dados.drop(['Close', 'retorno', 'retorno_diario'], axis=1, errors='ignore')
+        target = dados[['Close']]  # Mantém como DataFrame para usar .iloc
+        
+        # Modelagem
+        model, val_mae = train_advanced_model(features, target)
+        test_preds = model.predict(features.iloc[-30:])
+        test_mae = mean_absolute_error(target.iloc[-30:].values.ravel(), test_preds)
+        
+        # Previsão - usando .iloc[0] para evitar FutureWarning
+        last_features = features.iloc[-1].values.reshape(1, -1)
+        forecast = float(model.predict(last_features)[0])
+        last_price = float(dados['Close'].iloc[-1])
+        
+        # Geração de alertas
+        analysis_data = {
+            'RSI': float(dados['RSI'].iloc[-1]),
+            'MA7': float(dados['MA7'].iloc[-1]),
+            'MA20': float(dados['MA20'].iloc[-1]),
+            'MA50': float(dados['SMA_30'].iloc[-1]),
+            'Volume': float(dados['Volume'].iloc[-1]),
+            'avg_volume': float(dados['Volume'].mean()),
+            'tendencia': "alta" if forecast >= last_price else "baixa",
+            'sentimento': sentiment
+        }
+        alerts = generate_smart_alerts(analysis_data)
+        
+        # Backtesting
+        backtest_results = backtest_strategy(dados)
+        
+        return {
+            "ticker": ticker,
+            "preco_atual": round(last_price, 2),
+            "previsao": round(forecast, 2),
+            "indicadores": {
+                "RSI": round(float(dados['RSI'].iloc[-1]), 2),
+                "MACD": round(float(dados['MACD'].iloc[-1]), 2),
+                "Bollinger": {
+                    "upper": round(float(dados['BB_upper'].iloc[-1]), 2),
+                    "middle": round(float(dados['BB_middle'].iloc[-1]), 2),
+                    "lower": round(float(dados['BB_lower'].iloc[-1]), 2)
+                },
+                "VWAP": round(float(dados['VWAP'].iloc[-1]), 2),
+                "ATR": round(float(dados['ATR'].iloc[-1]), 2)
+            },
+            "model_performance": {
+                "validation_mae": round(val_mae, 2),
+                "test_mae": round(test_mae, 2)
+            },
+            "sector_analysis": sector_analysis,
+            "sentiment_analysis": sentiment,
+            "alerts": alerts,
+            "backtest_results": {
+                "return_percent": round(float(backtest_results["return_percent"]), 2),
+                "max_drawdown": round(float(backtest_results["max_drawdown"]), 2)
+            },
+            "timestamp": pd.Timestamp.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao analisar {ticker}: {str(e)}", exc_info=True)
+        return {"erro": str(e)}
+    
 def analyze_all():
     try:
         # Fallback para pegar as ações do Ibovespa via scraping
