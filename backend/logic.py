@@ -36,25 +36,54 @@ def compute_macd(df, short=12, long=26, signal=9):
     signal_line = macd.ewm(span=signal, adjust=False).mean()
     return macd, signal_line
 
-def compute_adx(df, period=14):
-    """
-    Calcula o ADX (Average Directional Index) para o dataframe com colunas 'High', 'Low', 'Close'.
-    """
-    high = df['High']
-    low = df['Low']
-    close = df['Close']
-
-    plus_dm = high.diff()
-    minus_dm = low.diff().mul(-1)  # Inverte o sinal para facilitar comparação
-
-    # Aplica as condições para +DM e -DM, zerando valores que não cumpram
-    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
-    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
-
-    tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low - close.shift(1)).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+def train_advanced_model(features, target):
+    # Converter target para array 1D
+    target = target.values.ravel() if isinstance(target, pd.DataFrame) else target.values
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        features, target, test_size=0.2, random_state=42
+    )
+    
+    models = {
+        "XGBoost": XGBRegressor(),
+        "RandomForest": RandomForestRegressor(),
+        "GradientBoosting": GradientBoostingRegressor()
+    }
+    
+    best_model = None
+    best_score = float('inf')
+    
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        preds = model.predict(X_test)
+        mae = mean_absolute_error(y_test, preds)
+        if mae < best_score:
+            best_score = mae
+            best_model = model
+    
+    return best_model, best_score
+    X_train, X_test, y_train, y_test = train_test_split(
+        features, target, test_size=0.2, random_state=42
+    )
+    
+    models = {
+        "XGBoost": XGBRegressor(),
+        "RandomForest": RandomForestRegressor(),
+        "GradientBoosting": GradientBoostingRegressor()
+    }
+    
+    best_model = None
+    best_score = float('inf')
+    
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        preds = model.predict(X_test)
+        mae = mean_absolute_error(y_test, preds)
+        if mae < best_score:
+            best_score = mae
+            best_model = model
+    
+    return best_model, best_score
 
 def compute_rsi(series, period=14):
     delta = series.diff()
