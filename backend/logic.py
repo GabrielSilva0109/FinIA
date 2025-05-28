@@ -30,6 +30,36 @@ def compute_macd(df, short=12, long=26, signal=9):
     signal_line = macd.ewm(span=signal, adjust=False).mean()
     return macd, signal_line
 
+def compute_adx(df, period=14):
+    """
+    Calcula o ADX (Average Directional Index) para o dataframe com colunas 'High', 'Low', 'Close'.
+    """
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+
+    plus_dm = high.diff()
+    minus_dm = low.diff().mul(-1)  # Inverte o sinal para facilitar comparação
+
+    # Aplica as condições para +DM e -DM, zerando valores que não cumpram
+    plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+    minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    atr = tr.rolling(window=period).mean()
+
+    plus_di = 100 * (plus_dm.rolling(window=period).mean() / atr)
+    minus_di = 100 * (minus_dm.rolling(window=period).mean() / atr)
+
+    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)) * 100
+    adx = dx.rolling(window=period).mean()
+
+    return adx
+
 def analyze(ticker):
     try:
         dados = yf.download(ticker, period="180d", interval="1d")
@@ -73,7 +103,12 @@ def analyze(ticker):
         volatilidade = dados['retorno_diario'].std()
 
         # Normalização dos dados para o modelo
-        features = dados[['Open', 'High', 'Low', 'Volume']].copy()
+        features = dados[[
+            'Open', 'High', 'Low', 'Volume',
+            'RSI', 'MACD', 'MACD_Signal',
+            'volatilidade', 'SMA_7', 'SMA_15', 'SMA_30'
+        ]].copy()
+
         features.fillna(0, inplace=True)
 
         minimos = features.min()
@@ -93,7 +128,7 @@ def analyze(ticker):
 
         ultimo_preco = float(dados['Close'].iloc[-1])
 
-        tendencia = "alta" if previsao > ultimo_preco else "baixa"
+        tendencia = "alta" if previsao >= ultimo_preco * 0.995 else "baixa"
 
         r2 = modelo.score(features_normalizadas, precos) * 100
 
