@@ -80,7 +80,6 @@ def analyze(ticker):
     except Exception as e:
         return {"erro": str(e)}
 
-
 def sentimentAnalysis(ticker):
     try:
         # Pega nome da empresa pelo yfinance (fallback para ticker sem sufixo)
@@ -146,43 +145,56 @@ def gerar_estrategia(tendencia):
         return "Considere manter ou comprar mais, a tendência é de valorização 📈"
     else:
         return "Considere vender ou aguardar nova entrada, tendência de queda 📉"
+    
+def analyze_all():
+    try:
+        # Fallback para pegar as ações do Ibovespa via scraping
+        url = "https://finance.yahoo.com/quote/%5EBVSP/components?p=%5EBVSP"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
+        tickers_lista = []
 
+        for a in soup.select("table tbody tr td:nth-child(1) a"):
+            ticker = a.text.strip()
+            if not ticker.endswith(".SA"):
+                ticker += ".SA"
+            tickers_lista.append(ticker)
 
-# import yfinance as yf
-# import pandas as pd
-# from sklearn.linear_model import LinearRegression
-# import numpy as np
+        tickers_lista = tickers_lista[:30]  # Limita às 30 maiores
 
-# def analyze(ticker):
-#     try:
-#         dados = yf.download(ticker, period="180d", interval="1d")
-#         if dados.empty:
-#             return {"erro": "Ticker inválido ou sem dados"}
+        resultados = []
 
-#         dias = np.arange(len(dados)).reshape(-1, 1)
-#         precos = dados['Close'].values.reshape(-1)
+        for ticker in tickers_lista:
+            print(f"Analisando {ticker}...")
+            resultado = analyze(ticker)
 
-#         modelo = LinearRegression()
-#         modelo.fit(dias, precos)
+            if "erro" in resultado:
+                continue
 
-#         previsao = float(modelo.predict(np.array([[len(dados)]]))[0])
-#         ultimo_preco = float(dados['Close'].iloc[-1])
+            preco_atual = resultado["preco_atual"]
+            previsao = resultado["previsao_proximo_dia"]
+            diferenca = previsao - preco_atual
 
-#         tendencia = "alta" if previsao > ultimo_preco else "baixa"
+            resultados.append({
+                "ticker": ticker,
+                "preco_atual": preco_atual,
+                "previsao": previsao,
+                "diferenca": diferenca,
+                "tendencia": resultado["tendencia"],
+                "confianca_modelo_r2": resultado["confianca_modelo_r2"],
+                "sentimento": resultado["sentimento"],
+                "estrategia": resultado["estrategia"]
+            })
 
-#         return {
-#             "ticker": ticker,
-#             "preco_atual": round(ultimo_preco, 2),
-#             "previsao_proximo_dia": round(previsao, 2),
-#             "tendencia": tendencia,
-#             "estrategia": gerar_estrategia(tendencia)
-#         }
+        # Ordena por diferença de previsão - preço atual
+        oportunidades = sorted(resultados, key=lambda x: x["diferenca"], reverse=True)[:5]
+        quedas = sorted(resultados, key=lambda x: x["diferenca"])[:5]
 
-#     except Exception as e:
-#         return {"erro": str(e)}
+        return {
+            "melhores_oportunidades": oportunidades,
+            "maiores_quedas": quedas
+        }
 
-# def gerar_estrategia(tendencia):
-#     if tendencia == "alta":
-#         return "Considere manter ou comprar mais, a tendência é de valorização 📈"
-#     else:
-#         return "Considere vender ou aguardar nova entrada, tendência de queda 📉"
+    except Exception as e:
+        return {"erro": str(e)}
