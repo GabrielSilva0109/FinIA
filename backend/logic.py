@@ -20,8 +20,9 @@ logger = logging.getLogger(__name__)
 def compute_technical_indicators(df):
     df['retorno'] = df['Close'].pct_change()
     df['MA7'] = df['Close'].rolling(window=7).mean()
+    df['MA15'] = df['Close'].rolling(window=15).mean() # Added 15-day MA
     df['MA20'] = df['Close'].rolling(window=20).mean()
-    df['SMA_30'] = df['Close'].rolling(window=30).mean()
+    df['SMA_30'] = df['Close'].rolling(window=30).mean() # Renamed to MA30 for consistency
     df['RSI'] = compute_rsi(df['Close'])
     df['MACD'], df['MACD_Signal'] = compute_macd(df)
     df['volatilidade'] = df['retorno'].rolling(window=7).std()
@@ -40,28 +41,6 @@ def train_advanced_model(features, target):
     # Converter target para array 1D
     target = target.values.ravel() if isinstance(target, pd.DataFrame) else target.values
     
-    X_train, X_test, y_train, y_test = train_test_split(
-        features, target, test_size=0.2, random_state=42
-    )
-    
-    models = {
-        "XGBoost": XGBRegressor(),
-        "RandomForest": RandomForestRegressor(),
-        "GradientBoosting": GradientBoostingRegressor()
-    }
-    
-    best_model = None
-    best_score = float('inf')
-    
-    for name, model in models.items():
-        model.fit(X_train, y_train)
-        preds = model.predict(X_test)
-        mae = mean_absolute_error(y_test, preds)
-        if mae < best_score:
-            best_score = mae
-            best_model = model
-    
-    return best_model, best_score
     X_train, X_test, y_train, y_test = train_test_split(
         features, target, test_size=0.2, random_state=42
     )
@@ -160,12 +139,29 @@ def enhanced_sentiment_analysis(ticker):
         vader_avg = sum(vader_scores) / len(vader_scores)
         
         # Análise com modelo transformer (mais preciso)
-        sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
+        # Check if the model is available. If not, inform the user about the installation.
+        try:
+            sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
+        except Exception as e:
+            logger.warning(f"Transformer model not found or failed to load: {e}. Falling back to VADER only. Ensure TensorFlow 2.0 or PyTorch is installed for full functionality.")
+            # If the transformer model cannot be loaded, fall back to VADER only for combined score
+            if vader_avg > 0.1:
+                return "fortemente positivo"
+            elif vader_avg > 0:
+                return "positivo"
+            elif vader_avg < -0.1:
+                return "fortemente negativo"
+            elif vader_avg < 0:
+                return "negativo"
+            else:
+                return "neutro"
+
         transformer_results = sentiment_pipeline(all_headlines[:20])  # Limita devido ao tempo de processamento
         
         # Combina os resultados
-        final_score = (vader_avg + sum([1 if r['label'] == 'POS' else -1 if r['label'] == 'NEG' else 0 
-                                      for r in transformer_results])/len(transformer_results)) / 2
+        transformer_sentiment_score = sum([1 if r['label'] == 'POS' else -1 if r['label'] == 'NEG' else 0 
+                                      for r in transformer_results])/len(transformer_results) if transformer_results else 0
+        final_score = (vader_avg + transformer_sentiment_score) / 2
         
         if final_score > 0.1:
             return "fortemente positivo"
@@ -194,7 +190,14 @@ def sector_correlation_analysis(ticker):
             "Technology": "XLK",
             "Financial Services": "XLF",
             "Healthcare": "XLV",
-            # ... (restante do dicionário)
+            "Industrials": "XLI",
+            "Consumer Cyclical": "XLY",
+            "Consumer Defensive": "XLP",
+            "Energy": "XLE",
+            "Utilities": "XLU",
+            "Real Estate": "XLRE",
+            "Communication Services": "XLC",
+            "Basic Materials": "XLB"
         }
         
         if sector not in sector_etfs:
@@ -264,7 +267,7 @@ def generate_smart_alerts(analysis_result):
     rsi = float(analysis_result['RSI'])
     ma7 = float(analysis_result['MA7'])
     ma20 = float(analysis_result['MA20'])
-    ma50 = float(analysis_result['MA50'])
+    ma30 = float(analysis_result['MA30']) # Changed from MA50 to MA30
     volume = float(analysis_result['Volume'])
     avg_volume = float(analysis_result['avg_volume'])
     tendencia = analysis_result['tendencia']
@@ -277,10 +280,15 @@ def generate_smart_alerts(analysis_result):
         alerts.append("Alerta: RSI abaixo de 30 (sobrevendido) com tendência de baixa - possível reversão")
     
     # Alerta de cruzamento de médias móveis
-    if ma7 > ma20 > ma50:
-        alerts.append("Tendência de alta: MA7 > MA20 > MA50")
-    elif ma7 < ma20 < ma50:
-        alerts.append("Tendência de baixa: MA7 < MA20 < MA50")
+    # Re-evaluating the MA alerts based on 7, 15, 30
+    ma15 = float(analysis_result['MA15'])
+    if ma7 > ma15 and ma15 > ma30:
+        alerts.append("Tendência de alta forte: MA7 > MA15 > MA30")
+    elif ma7 < ma15 and ma15 < ma30:
+        alerts.append("Tendência de baixa forte: MA7 < MA15 < MA30")
+    elif ma7 > ma30 and ma15 < ma30:
+        alerts.append("Atenção: MA7 acima de MA30, mas MA15 abaixo - tendência incerta ou reversão")
+
     
     # Alerta de volume
     if volume > 2 * avg_volume:
@@ -327,6 +335,7 @@ def backtest_strategy(df, initial_capital=10000):
         "max_drawdown": max_drawdown,
         "signals": signals
     }
+
 # Função para calcular indicadores técnicos
 def compute_drawdown(values):
     peak = values[0]
@@ -338,6 +347,52 @@ def compute_drawdown(values):
         if dd > max_dd:
             max_dd = dd
     return max_dd * 100
+
+# Function to determine overall trend based on moving averages
+def get_ma_trend(ma7, ma15, ma30):
+    if ma7 > ma15 and ma15 > ma30:
+        return "alta"
+    elif ma7 < ma15 and ma15 < ma30:
+        return "baixa"
+    else:
+        return "neutra"
+
+# Function to suggest a strategy
+def get_strategy(last_price, forecast, rsi, ma7, ma15, ma30, sentiment):
+    strategy = "Observar"
+
+    # Price vs. Forecast
+    if forecast > last_price * 1.02: # If forecast is significantly higher
+        strategy = "Possível Compra (Previsão Otimista)"
+    elif forecast < last_price * 0.98: # If forecast is significantly lower
+        strategy = "Possível Venda (Previsão Pessimista)"
+
+    # RSI based strategy
+    if rsi < 30:
+        strategy = "Sinal de Compra (Sobrecomprado)"
+    elif rsi > 70:
+        strategy = "Sinal de Venda (Sobrevendido)"
+    
+    # Moving Average Cross Strategy (simplified Golden/Death Cross)
+    if ma7 > ma15 and ma15 > ma30: # Strong bullish alignment
+        if strategy != "Sinal de Compra (Sobrecomprado)": # Avoid conflicting RSI alert
+            strategy = "Sinal de Compra (Tendência de Alta)"
+    elif ma7 < ma15 and ma15 < ma30: # Strong bearish alignment
+        if strategy != "Sinal de Venda (Sobrevendido)": # Avoid conflicting RSI alert
+            strategy = "Sinal de Venda (Tendência de Baixa)"
+    
+    # Incorporate sentiment
+    if "fortemente positivo" in sentiment.lower() and "compra" in strategy.lower():
+        strategy += " - Confirmado por Sentimento Positivo"
+    elif "fortemente negativo" in sentiment.lower() and "venda" in strategy.lower():
+        strategy += " - Confirmado por Sentimento Negativo"
+    
+    # Neutral/Uncertainty
+    if "Observar" in strategy and (sentiment == "neutro" or abs(forecast - last_price) < last_price * 0.01):
+        strategy = "Manter Posição / Neutro"
+
+    return strategy
+
 
 def analyze(ticker):
     try:
@@ -357,43 +412,72 @@ def analyze(ticker):
         # Análise de sentimento (com fallback)
         try:
             sentiment = enhanced_sentiment_analysis(ticker)
-        except:
+        except Exception as e:
+            logger.error(f"Erro na análise de sentimento para {ticker}: {e}")
             sentiment = "neutro"
         
         # Preparação dos dados para ML
-        features = dados.drop(['Close', 'retorno', 'retorno_diario'], axis=1, errors='ignore')
+        features = dados.drop(['Close', 'retorno'], axis=1, errors='ignore') # 'retorno_diario' not defined
         target = dados[['Close']]  # Mantém como DataFrame para usar .iloc
         
         # Modelagem
+        # Check if there are enough data points for training after dropping NaNs
+        if len(features) < 30: # Arbitrary minimum, adjust as needed
+            return {"erro": "Dados insuficientes para análise profunda e treinamento de modelo."}
+        
         model, val_mae = train_advanced_model(features, target)
-        test_preds = model.predict(features.iloc[-30:])
-        test_mae = mean_absolute_error(target.iloc[-30:].values.ravel(), test_preds)
+        
+        # Ensure there are enough data points for test_preds
+        if len(features) >= 30:
+            test_preds = model.predict(features.iloc[-30:])
+            test_mae = mean_absolute_error(target.iloc[-30:].values.ravel(), test_preds)
+        else:
+            test_preds = []
+            test_mae = np.nan # Not applicable if not enough data
         
         # Previsão - usando .iloc[0] para evitar FutureWarning
         last_features = features.iloc[-1].values.reshape(1, -1)
         forecast = float(model.predict(last_features)[0])
         last_price = float(dados['Close'].iloc[-1])
+
+        # Get moving averages for current data
+        ma7 = float(dados['MA7'].iloc[-1])
+        ma15 = float(dados['MA15'].iloc[-1])
+        ma30 = float(dados['SMA_30'].iloc[-1]) # Use SMA_30 as MA30
+
+        # Determine trend
+        tendencia = get_ma_trend(ma7, ma15, ma30)
+
+        # Determine strategy
+        strategy = get_strategy(last_price, forecast, float(dados['RSI'].iloc[-1]), ma7, ma15, ma30, sentiment)
         
         # Geração de alertas
         analysis_data = {
             'RSI': float(dados['RSI'].iloc[-1]),
-            'MA7': float(dados['MA7'].iloc[-1]),
+            'MA7': ma7,
+            'MA15': ma15, # Pass MA15 to alerts
             'MA20': float(dados['MA20'].iloc[-1]),
-            'MA50': float(dados['SMA_30'].iloc[-1]),
+            'MA30': ma30, # Pass MA30 to alerts
             'Volume': float(dados['Volume'].iloc[-1]),
             'avg_volume': float(dados['Volume'].mean()),
-            'tendencia': "alta" if forecast >= last_price else "baixa",
+            'tendencia': tendencia, # Use the new trend
             'sentimento': sentiment
         }
         alerts = generate_smart_alerts(analysis_data)
         
         # Backtesting
         backtest_results = backtest_strategy(dados)
-        
+
         return {
             "ticker": ticker,
             "preco_atual": round(last_price, 2),
             "previsao": round(forecast, 2),
+            "diferenca_preco_previsao": round(forecast - last_price, 2), # New field for clarity
+            "media_movel_7": round(ma7, 2),
+            "media_movel_15": round(ma15, 2),
+            "media_movel_30": round(ma30, 2),
+            "tendencia": tendencia, # Use the new trend classification
+            "estrategia": strategy, # Include the determined strategy
             "indicadores": {
                 "RSI": round(float(dados['RSI'].iloc[-1]), 2),
                 "MACD": round(float(dados['MACD'].iloc[-1]), 2),
@@ -407,7 +491,7 @@ def analyze(ticker):
             },
             "model_performance": {
                 "validation_mae": round(val_mae, 2),
-                "test_mae": round(test_mae, 2)
+                "test_mae": round(test_mae, 2) if not np.isnan(test_mae) else "N/A"
             },
             "sector_analysis": sector_analysis,
             "sentiment_analysis": sentiment,
@@ -465,8 +549,8 @@ def analyze_all():
                 "media_movel_30": media_movel_30,
                 "diferenca": diferenca,
                 "tendencia": resultado["tendencia"],
-                "confianca_modelo_r2": resultado["confianca_modelo_r2"],
-                "sentimento": resultado["sentimento"],
+                # "confianca_modelo_r2": resultado["confianca_modelo_r2"], # This was causing an error as it's not in the 'analyze' output
+                "sentimento": resultado["sentiment_analysis"], # Changed to sentiment_analysis
                 "estrategia": resultado["estrategia"]
             })
 
@@ -480,4 +564,5 @@ def analyze_all():
         }
 
     except Exception as e:
+        logger.error(f"Erro ao analisar todas as ações: {str(e)}", exc_info=True)
         return {"erro": str(e)}
