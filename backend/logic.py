@@ -12,6 +12,7 @@ from xgboost import XGBRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 import logging
+from sentiment_analysis import enhanced_sentiment_analysis
 
 # Configuração básica de logging
 logging.basicConfig(level=logging.INFO)
@@ -38,30 +39,44 @@ def compute_macd(df, short=12, long=26, signal=9):
     return macd, signal_line
 
 def train_advanced_model(features, target):
-    # Converter target para array 1D
-    target = target.values.ravel() if isinstance(target, pd.DataFrame) else target.values
+    # Validação básica dos dados
+    if features is None or target is None:
+        raise ValueError("Parâmetros 'features' e 'target' não podem ser None.")
     
+    if features.empty or len(target) == 0:
+        raise ValueError("Parâmetros 'features' e 'target' não podem estar vazios.")
+
+    # Garantir que o target seja um array 1D
+    target = target.values.ravel() if isinstance(target, pd.DataFrame) else target.values
+
+    # Dividir os dados em treino e teste
     X_train, X_test, y_train, y_test = train_test_split(
         features, target, test_size=0.2, random_state=42
     )
-    
+
     models = {
-        "XGBoost": XGBRegressor(),
-        "RandomForest": RandomForestRegressor(),
-        "GradientBoosting": GradientBoostingRegressor()
+        "XGBoost": XGBRegressor(random_state=42),
+        "RandomForest": RandomForestRegressor(random_state=42),
+        "GradientBoosting": GradientBoostingRegressor(random_state=42)
     }
-    
+
     best_model = None
     best_score = float('inf')
-    
+
     for name, model in models.items():
-        model.fit(X_train, y_train)
-        preds = model.predict(X_test)
-        mae = mean_absolute_error(y_test, preds)
-        if mae < best_score:
-            best_score = mae
-            best_model = model
-    
+        try:
+            model.fit(X_train, y_train)
+            preds = model.predict(X_test)
+            mae = mean_absolute_error(y_test, preds)
+            print(f"{name}: MAE = {mae:.4f}")
+            if mae < best_score:
+                best_score = mae
+                best_model = model
+        except Exception as e:
+            print(f"Erro ao treinar o modelo {name}: {e}")
+
+    print(f"\nMelhor modelo selecionado com MAE = {best_score:.4f}")
+
     return best_model, best_score
 
 def compute_rsi(series, period=14):
@@ -110,73 +125,6 @@ def compute_atr(df, window=14):
     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
     atr = tr.rolling(window=window).mean()
     return atr
-
-def enhanced_sentiment_analysis(ticker):
-    try:
-        # Coleta notícias de múltiplas fontes
-        news_sources = [
-            f"https://news.google.com/search?q={ticker}",
-            f"https://www.bloomberg.com/search?query={ticker}",
-            f"https://www.reuters.com/search/news?blob={ticker}"
-        ]
-        
-        all_headlines = []
-        for url in news_sources:
-            try:
-                response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                soup = BeautifulSoup(response.text, 'html.parser')
-                headlines = [h.get_text().strip() for h in soup.find_all(['h1', 'h2', 'h3', 'h4'])]
-                all_headlines.extend(headlines)
-            except:
-                continue
-        
-        if not all_headlines:
-            return "neutro"
-        
-        # Análise com VADER (rápido)
-        vader = SentimentIntensityAnalyzer()
-        vader_scores = [vader.polarity_scores(h)['compound'] for h in all_headlines]
-        vader_avg = sum(vader_scores) / len(vader_scores)
-        
-        # Análise com modelo transformer (mais preciso)
-        # Check if the model is available. If not, inform the user about the installation.
-        try:
-            sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
-        except Exception as e:
-            logger.warning(f"Transformer model not found or failed to load: {e}. Falling back to VADER only. Ensure TensorFlow 2.0 or PyTorch is installed for full functionality.")
-            # If the transformer model cannot be loaded, fall back to VADER only for combined score
-            if vader_avg > 0.1:
-                return "fortemente positivo"
-            elif vader_avg > 0:
-                return "positivo"
-            elif vader_avg < -0.1:
-                return "fortemente negativo"
-            elif vader_avg < 0:
-                return "negativo"
-            else:
-                return "neutro"
-
-        transformer_results = sentiment_pipeline(all_headlines[:20])  # Limita devido ao tempo de processamento
-        
-        # Combina os resultados
-        transformer_sentiment_score = sum([1 if r['label'] == 'POS' else -1 if r['label'] == 'NEG' else 0 
-                                      for r in transformer_results])/len(transformer_results) if transformer_results else 0
-        final_score = (vader_avg + transformer_sentiment_score) / 2
-        
-        if final_score > 0.1:
-            return "fortemente positivo"
-        elif final_score > 0:
-            return "positivo"
-        elif final_score < -0.1:
-            return "fortemente negativo"
-        elif final_score < 0:
-            return "negativo"
-        else:
-            return "neutro"
-            
-    except Exception as e:
-        print(f"Erro na análise de sentimento: {e}")
-        return "neutro"
 
 def sector_correlation_analysis(ticker):
     try:
@@ -231,7 +179,7 @@ def sector_correlation_analysis(ticker):
         }
     except:
         return None
-    
+
 # Função para calcular indicadores técnicos
 def time_series_validation(df):
     # Divide os dados em treino (70%), validação (20%) e teste (10%)
@@ -361,10 +309,14 @@ def get_ma_trend(ma7, ma15, ma30):
 def get_strategy(last_price, forecast, rsi, ma7, ma15, ma30, sentiment):
     strategy = "Observar"
 
+    # Se sentiment for dict, pegar o texto da chave 'final_sentiment'
+    if isinstance(sentiment, dict):
+        sentiment = sentiment.get("final_sentiment", "neutro")
+
     # Price vs. Forecast
-    if forecast > last_price * 1.02: # If forecast is significantly higher
+    if forecast > last_price * 1.02:  # If forecast is significantly higher
         strategy = "Possível Compra (Previsão Otimista)"
-    elif forecast < last_price * 0.98: # If forecast is significantly lower
+    elif forecast < last_price * 0.98:  # If forecast is significantly lower
         strategy = "Possível Venda (Previsão Pessimista)"
 
     # RSI based strategy
@@ -374,25 +326,27 @@ def get_strategy(last_price, forecast, rsi, ma7, ma15, ma30, sentiment):
         strategy = "Sinal de Venda (Sobrevendido)"
     
     # Moving Average Cross Strategy (simplified Golden/Death Cross)
-    if ma7 > ma15 and ma15 > ma30: # Strong bullish alignment
-        if strategy != "Sinal de Compra (Sobrecomprado)": # Avoid conflicting RSI alert
+    if ma7 > ma15 and ma15 > ma30:  # Strong bullish alignment
+        if strategy != "Sinal de Compra (Sobrecomprado)":  # Avoid conflicting RSI alert
             strategy = "Sinal de Compra (Tendência de Alta)"
-    elif ma7 < ma15 and ma15 < ma30: # Strong bearish alignment
-        if strategy != "Sinal de Venda (Sobrevendido)": # Avoid conflicting RSI alert
+    elif ma7 < ma15 and ma15 < ma30:  # Strong bearish alignment
+        if strategy != "Sinal de Venda (Sobrevendido)":  # Avoid conflicting RSI alert
             strategy = "Sinal de Venda (Tendência de Baixa)"
     
-    # Incorporate sentiment
-    if "fortemente positivo" in sentiment.lower() and "compra" in strategy.lower():
+    # Incorporate sentiment (trata o texto em lowercase para evitar erros)
+    sentiment_lower = sentiment.lower()
+    strategy_lower = strategy.lower()
+
+    if "fortemente positivo" in sentiment_lower and "compra" in strategy_lower:
         strategy += " - Confirmado por Sentimento Positivo"
-    elif "fortemente negativo" in sentiment.lower() and "venda" in strategy.lower():
+    elif "fortemente negativo" in sentiment_lower and "venda" in strategy_lower:
         strategy += " - Confirmado por Sentimento Negativo"
     
     # Neutral/Uncertainty
-    if "Observar" in strategy and (sentiment == "neutro" or abs(forecast - last_price) < last_price * 0.01):
+    if "observar" in strategy_lower and (sentiment_lower == "neutro" or abs(forecast - last_price) < last_price * 0.01):
         strategy = "Manter Posição / Neutro"
 
     return strategy
-
 
 def analyze(ticker):
     try:
@@ -412,6 +366,7 @@ def analyze(ticker):
         # Análise de sentimento (com fallback)
         try:
             sentiment = enhanced_sentiment_analysis(ticker)
+            
         except Exception as e:
             logger.error(f"Erro na análise de sentimento para {ticker}: {e}")
             sentiment = "neutro"

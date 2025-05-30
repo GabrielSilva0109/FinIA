@@ -189,7 +189,7 @@
 #         return "Considere vender ou aguardar nova entrada, tendência de queda 📉"
 
 # def analyze_all():
-#     try:
+    # try:
 #         # Fallback para pegar as ações do Ibovespa via scraping
 #         url = "https://finance.yahoo.com/quote/%5EBVSP/components?p=%5EBVSP"
 #         headers = {"User-Agent": "Mozilla/5.0"}
