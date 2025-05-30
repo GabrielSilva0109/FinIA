@@ -5,6 +5,8 @@ import re
 import hashlib
 from collections import defaultdict
 import time # Para adicionar delays entre as requisições
+import yfinance as yf
+import re
 
 def preprocess_text(text):
     """Remove URLs, caracteres não alfanuméricos e espaços extras."""
@@ -14,18 +16,23 @@ def preprocess_text(text):
     return text
 
 # # Função auxiliar para obter o nome da empresa a partir do ticker
-def get_company_name_from_ticker(ticker):
-    """
-    Tenta obter o nome da empresa a partir do ticker.
-    Esta é uma substituição simples para TICKER_SYNONYMS para buscas.
-    Em um cenário real, você poderia ter um dicionário/banco de dados para isso.
-    """
-    if ticker.upper() == "VALE3.SA":
-        return "Vale"
-    elif ticker.upper() == "AAPL":
-        return "Apple"
-    # Adicione mais mapeamentos conforme necessário
-    return ticker.replace(".SA", "") # Para B3, remove o .SA para buscar o nome base
+def get_company_name_from_ticker(ticker: str) -> str:
+    ticker = ticker.upper().strip()
+
+    # Verifica se é ticker brasileiro (ex: VALE3, PETR4, ITUB4 etc.)
+    is_brazilian = bool(re.match(r'^[A-Z]{4}[0-9]$', ticker)) or ticker.endswith('.SA')
+
+    # Se for brasileiro e não tiver .SA, adiciona
+    if is_brazilian and not ticker.endswith('.SA'):
+        ticker += ".SA"
+
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        return info.get("longName") or info.get("shortName") or ticker
+    except Exception as e:
+        print(f"Erro ao buscar nome da empresa para o ticker '{ticker}': {e}")
+        return ticker
 
 def fetch_news_from_source(url, parser, tag, attr_key, attr_value, relevant_terms):
     """
