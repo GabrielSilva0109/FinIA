@@ -13,6 +13,7 @@ def preprocess_text(text):
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
+# # Função auxiliar para obter o nome da empresa a partir do ticker
 def get_company_name_from_ticker(ticker):
     """
     Tenta obter o nome da empresa a partir do ticker.
