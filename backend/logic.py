@@ -68,14 +68,14 @@ def train_advanced_model(features, target):
             model.fit(X_train, y_train)
             preds = model.predict(X_test)
             mae = mean_absolute_error(y_test, preds)
-            print(f"{name}: MAE = {mae:.4f}")
+            # print(f"{name}: MAE = {mae:.4f}")
             if mae < best_score:
                 best_score = mae
                 best_model = model
         except Exception as e:
             print(f"Erro ao treinar o modelo {name}: {e}")
 
-    print(f"\nMelhor modelo selecionado com MAE = {best_score:.4f}")
+    # print(f"\nMelhor modelo selecionado com MAE = {best_score:.4f}")
 
     return best_model, best_score
 
