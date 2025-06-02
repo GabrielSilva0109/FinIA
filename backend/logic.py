@@ -504,7 +504,6 @@ def analyze_all():
                 "media_movel_30": media_movel_30,
                 "diferenca": diferenca,
                 "tendencia": resultado["tendencia"],
-                # "confianca_modelo_r2": resultado["confianca_modelo_r2"], # This was causing an error as it's not in the 'analyze' output
                 "sentimento": resultado["sentiment_analysis"], # Changed to sentiment_analysis
                 "estrategia": resultado["estrategia"]
             })
