@@ -18,6 +18,7 @@ from sentiment_analysis import enhanced_sentiment_analysis
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ================= INDICADORES TECNICOS ================= #
 def compute_technical_indicators(df):
     df['retorno'] = df['Close'].pct_change()
     df['MA7'] = df['Close'].rolling(window=7).mean()
@@ -31,6 +32,14 @@ def compute_technical_indicators(df):
     df = df.dropna()
     return df
 
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0).rolling(window=period).mean()
+    loss = -delta.clip(upper=0).rolling(window=period).mean()
+    rs = gain / (loss + 1e-10)
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
 def compute_macd(df, short=12, long=26, signal=9):
     exp1 = df['Close'].ewm(span=short, adjust=False).mean()
     exp2 = df['Close'].ewm(span=long, adjust=False).mean()
@@ -39,20 +48,8 @@ def compute_macd(df, short=12, long=26, signal=9):
     return macd, signal_line
 
 def train_advanced_model(features, target):
-    # Validação básica dos dados
-    if features is None or target is None:
-        raise ValueError("Parâmetros 'features' e 'target' não podem ser None.")
-    
-    if features.empty or len(target) == 0:
-        raise ValueError("Parâmetros 'features' e 'target' não podem estar vazios.")
-
-    # Garantir que o target seja um array 1D
     target = target.values.ravel() if isinstance(target, pd.DataFrame) else target.values
-
-    # Dividir os dados em treino e teste
-    X_train, X_test, y_train, y_test = train_test_split(
-        features, target, test_size=0.2, random_state=42
-    )
+    X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
 
     models = {
         "XGBoost": XGBRegressor(random_state=42),
@@ -60,22 +57,18 @@ def train_advanced_model(features, target):
         "GradientBoosting": GradientBoostingRegressor(random_state=42)
     }
 
-    best_model = None
-    best_score = float('inf')
+    best_model, best_score = None, float('inf')
 
     for name, model in models.items():
         try:
             model.fit(X_train, y_train)
             preds = model.predict(X_test)
             mae = mean_absolute_error(y_test, preds)
-            # print(f"{name}: MAE = {mae:.4f}")
             if mae < best_score:
                 best_score = mae
                 best_model = model
         except Exception as e:
-            print(f"Erro ao treinar o modelo {name}: {e}")
-
-    # print(f"\nMelhor modelo selecionado com MAE = {best_score:.4f}")
+            logger.warning(f"Erro ao treinar modelo {name}: {e}")
 
     return best_model, best_score
 
@@ -128,50 +121,26 @@ def compute_atr(df, window=14):
 
 def sector_correlation_analysis(ticker):
     try:
-        stock_info = yf.Ticker(ticker).info
-        sector = stock_info.get('sector', None)
-        
-        if not sector:
-            return None
-            
+        info = yf.Ticker(ticker).info
+        sector = info.get('sector', None)
+
         sector_etfs = {
-            "Technology": "XLK",
-            "Financial Services": "XLF",
-            "Healthcare": "XLV",
-            "Industrials": "XLI",
-            "Consumer Cyclical": "XLY",
-            "Consumer Defensive": "XLP",
-            "Energy": "XLE",
-            "Utilities": "XLU",
-            "Real Estate": "XLRE",
-            "Communication Services": "XLC",
-            "Basic Materials": "XLB"
+            "Technology": "XLK", "Financial Services": "XLF", "Healthcare": "XLV",
+            "Industrials": "XLI", "Consumer Cyclical": "XLY", "Consumer Defensive": "XLP",
+            "Energy": "XLE", "Utilities": "XLU", "Real Estate": "XLRE",
+            "Communication Services": "XLC", "Basic Materials": "XLB"
         }
-        
-        if sector not in sector_etfs:
+
+        if not sector or sector not in sector_etfs:
             return None
-            
-        etf_ticker = sector_etfs[sector]
-        stock_data = yf.download(ticker, period="60d", interval="1d", auto_adjust=False)['Close'].pct_change().dropna()
-        etf_data = yf.download(etf_ticker, period="60d", interval="1d", auto_adjust=False)['Close'].pct_change().dropna()
+
+        etf = sector_etfs[sector]
+        stock_data = yf.download(ticker, period="60d", interval="1d")["Close"].pct_change().dropna()
+        etf_data = yf.download(etf, period="60d", interval="1d")["Close"].pct_change().dropna()
         
-        # Garantir que temos dados suficientes
-        if len(stock_data) < 2 or len(etf_data) < 2:
-            return None
-            
-        # Ajustar tamanho dos arrays
         min_len = min(len(stock_data), len(etf_data))
-        stock_data = stock_data[-min_len:]
-        etf_data = etf_data[-min_len:]
-        
-        # Calcular correlação com verificação
-        try:
-            correlation = np.corrcoef(stock_data, etf_data)[0,1]
-            if np.isnan(correlation):
-                return None
-        except:
-            return None
-        
+        correlation = np.corrcoef(stock_data[-min_len:], etf_data[-min_len:])[0, 1]
+
         return {
             "sector": sector,
             "correlation_with_sector": round(correlation, 2),
@@ -179,75 +148,58 @@ def sector_correlation_analysis(ticker):
         }
     except:
         return None
-
+    
 # Função para calcular indicadores técnicos
 def time_series_validation(df):
-    # Divide os dados em treino (70%), validação (20%) e teste (10%)
     train_size = int(0.7 * len(df))
     val_size = int(0.2 * len(df))
-    
     train = df.iloc[:train_size]
     val = df.iloc[train_size:train_size+val_size]
     test = df.iloc[train_size+val_size:]
     
-    # Treina o modelo
     model = XGBRegressor()
     model.fit(train.drop('Close', axis=1), train['Close'])
-    
-    # Avalia no conjunto de validação
+
     val_preds = model.predict(val.drop('Close', axis=1))
-    val_mae = mean_absolute_error(val['Close'], val_preds)
-    
-    # Avalia no conjunto de teste (últimos dados)
     test_preds = model.predict(test.drop('Close', axis=1))
-    test_mae = mean_absolute_error(test['Close'], test_preds)
-    
+
     return {
-        "validation_mae": val_mae,
-        "test_mae": test_mae,
+        "validation_mae": mean_absolute_error(val['Close'], val_preds),
+        "test_mae": mean_absolute_error(test['Close'], test_preds),
         "model": model
     }
 
+# ================= ALERTAS INTELIGENTES ================= #
 def generate_smart_alerts(analysis_result):
     alerts = []
-    
-    # Certifique-se de que estamos comparando valores únicos, não Series
+
     rsi = float(analysis_result['RSI'])
     ma7 = float(analysis_result['MA7'])
-    ma20 = float(analysis_result['MA20'])
-    ma30 = float(analysis_result['MA30']) # Changed from MA50 to MA30
+    ma15 = float(analysis_result['MA15'])
+    ma30 = float(analysis_result['MA30'])
     volume = float(analysis_result['Volume'])
     avg_volume = float(analysis_result['avg_volume'])
     tendencia = analysis_result['tendencia']
     sentimento = analysis_result['sentimento']
-    
-    # Alerta de divergência RSI-preço
+
     if rsi > 70 and tendencia == 'alta':
         alerts.append("Alerta: RSI acima de 70 (sobrecomprado) com tendência de alta - possível correção")
     elif rsi < 30 and tendencia == 'baixa':
         alerts.append("Alerta: RSI abaixo de 30 (sobrevendido) com tendência de baixa - possível reversão")
-    
-    # Alerta de cruzamento de médias móveis
-    # Re-evaluating the MA alerts based on 7, 15, 30
-    ma15 = float(analysis_result['MA15'])
-    if ma7 > ma15 and ma15 > ma30:
-        alerts.append("Tendência de alta forte: MA7 > MA15 > MA30")
-    elif ma7 < ma15 and ma15 < ma30:
-        alerts.append("Tendência de baixa forte: MA7 < MA15 < MA30")
-    elif ma7 > ma30 and ma15 < ma30:
-        alerts.append("Atenção: MA7 acima de MA30, mas MA15 abaixo - tendência incerta ou reversão")
 
-    
-    # Alerta de volume
+    if ma7 > ma15 > ma30:
+        alerts.append("Tendência de alta forte: MA7 > MA15 > MA30")
+    elif ma7 < ma15 < ma30:
+        alerts.append("Tendência de baixa forte: MA7 < MA15 < MA30")
+
     if volume > 2 * avg_volume:
-        alerts.append(f"Volume alto: {volume/avg_volume:.1f}x a média")
-    
-    # Alerta de sentimento
+        alerts.append(f"Volume alto: {volume / avg_volume:.1f}x a média")
+
     if sentimento == 'fortemente positivo' and tendencia == 'baixa':
         alerts.append("Divergência: Sentimento fortemente positivo com tendência de baixa")
     elif sentimento == 'fortemente negativo' and tendencia == 'alta':
         alerts.append("Divergência: Sentimento fortemente negativo com tendência de alta")
-    
+
     return alerts
 
 # Função para calcular indicadores técnicos
