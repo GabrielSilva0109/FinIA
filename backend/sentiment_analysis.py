@@ -158,12 +158,10 @@ def enhanced_sentiment_analysis(ticker):
     sources = [
         # (URL formatada, parser, tag da manchete, atributo da manchete, valor do atributo)
         # Lembre-se: o '{query}' será preenchido com o `ticker` ou `company_name`
-        (f"https://valor.globo.com/busca/?q={company_name}", "html.parser", "a", "class", "feed-post-link"),
         (f"https://www.infomoney.com.br/?s={company_name}", "html.parser", "a", "class", "hl-title"),
         (f"https://exame.com/?s={company_name}", "html.parser", "a", "class", "title"),
         (f"https://br.investing.com/search/?q={company_name}", "html.parser", "a", "class", "title"),
         (f"https://busca.uol.com.br/?q={company_name}", "html.parser", "a", "class", "thumb-caption"),
-        (f"https://g1.globo.com/busca/?q={company_name}", "html.parser", "a", "class", "widget--info__text-container"),
         (f"https://busca.estadao.com.br/?q={company_name}", "html.parser", "a", "class", "resultado"),
         # Yahoo Finance (pode exigir ajustes específicos se o lookup não funcionar bem)
         (f"https://br.financas.yahoo.com/lookup?s={ticker}", "html.parser", "a", "class", "Fz(16px)"),
