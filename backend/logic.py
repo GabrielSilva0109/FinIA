@@ -30,6 +30,7 @@ def compute_technical_indicators(df):
     df['volatilidade'] = df['retorno'].rolling(window=7).std()
     df['Volume'] = df['Volume'].astype(float)
     df = df.dropna()
+    
     return df
 
 def compute_rsi(series, period=14):
@@ -300,6 +301,32 @@ def get_strategy(last_price, forecast, rsi, ma7, ma15, ma30, sentiment):
 
     return strategy
 
+def adjust_forecast_with_indicators(forecast, last_price, rsi, macd, ma7, ma15, ma30):
+    """
+    Ajusta a previsão do modelo com base em sinais dos indicadores técnicos.
+    """
+    adjustment = 0
+
+    # Exemplo de ajuste baseado no RSI
+    if rsi > 70:
+        adjustment -= 0.01 * last_price  # Reduz 1% se sobrecomprado
+    elif rsi < 30:
+        adjustment += 0.01 * last_price  # Aumenta 1% se sobrevendido
+
+    # Exemplo de ajuste baseado em médias móveis
+    if ma7 > ma15 > ma30:
+        adjustment += 0.005 * last_price  # Tendência de alta, aumenta 0.5%
+    elif ma7 < ma15 < ma30:
+        adjustment -= 0.005 * last_price  # Tendência de baixa, reduz 0.5%
+
+    # Exemplo de ajuste baseado no MACD
+    if macd > 0:
+        adjustment += 0.003 * last_price
+    else:
+        adjustment -= 0.003 * last_price
+
+    return forecast + adjustment
+
 def analyze(ticker):
     try:
         # Coleta de dados com auto_adjust explícito
@@ -318,56 +345,58 @@ def analyze(ticker):
         # Análise de sentimento (com fallback)
         try:
             sentiment = enhanced_sentiment_analysis(ticker)
-            
         except Exception as e:
             logger.error(f"Erro na análise de sentimento para {ticker}: {e}")
             sentiment = "neutro"
         
         # Preparação dos dados para ML
-        features = dados.drop(['Close', 'retorno'], axis=1, errors='ignore') # 'retorno_diario' not defined
-        target = dados[['Close']]  # Mantém como DataFrame para usar .iloc
+        features = dados.drop(['Close', 'retorno'], axis=1, errors='ignore')
+        target = dados[['Close']]
         
         # Modelagem
-        # Check if there are enough data points for training after dropping NaNs
-        if len(features) < 30: # Arbitrary minimum, adjust as needed
+        if len(features) < 30:
             return {"erro": "Dados insuficientes para análise profunda e treinamento de modelo."}
         
         model, val_mae = train_advanced_model(features, target)
         
-        # Ensure there are enough data points for test_preds
         if len(features) >= 30:
             test_preds = model.predict(features.iloc[-30:])
             test_mae = mean_absolute_error(target.iloc[-30:].values.ravel(), test_preds)
         else:
             test_preds = []
-            test_mae = np.nan # Not applicable if not enough data
+            test_mae = np.nan
         
-        # Previsão - usando .iloc[0] para evitar FutureWarning
+        # Previsão do modelo
         last_features = features.iloc[-1].values.reshape(1, -1)
         forecast = float(model.predict(last_features)[0])
         last_price = float(dados['Close'].iloc[-1])
 
-        # Get moving averages for current data
+        # Indicadores para ajuste
         ma7 = float(dados['MA7'].iloc[-1])
         ma15 = float(dados['MA15'].iloc[-1])
-        ma30 = float(dados['SMA_30'].iloc[-1]) # Use SMA_30 as MA30
+        ma30 = float(dados['SMA_30'].iloc[-1])
+        rsi = float(dados['RSI'].iloc[-1])
+        macd = float(dados['MACD'].iloc[-1])
 
-        # Determine trend
+        # Ajuste da previsão com indicadores técnicos
+        forecast_adjusted = adjust_forecast_with_indicators(forecast, last_price, rsi, macd, ma7, ma15, ma30)
+
+        # Tendência
         tendencia = get_ma_trend(ma7, ma15, ma30)
 
-        # Determine strategy
-        strategy = get_strategy(last_price, forecast, float(dados['RSI'].iloc[-1]), ma7, ma15, ma30, sentiment)
+        # Estratégia
+        strategy = get_strategy(last_price, forecast_adjusted, rsi, ma7, ma15, ma30, sentiment)
         
         # Geração de alertas
         analysis_data = {
-            'RSI': float(dados['RSI'].iloc[-1]),
+            'RSI': rsi,
             'MA7': ma7,
-            'MA15': ma15, # Pass MA15 to alerts
+            'MA15': ma15,
             'MA20': float(dados['MA20'].iloc[-1]),
-            'MA30': ma30, # Pass MA30 to alerts
+            'MA30': ma30,
             'Volume': float(dados['Volume'].iloc[-1]),
             'avg_volume': float(dados['Volume'].mean()),
-            'tendencia': tendencia, # Use the new trend
+            'tendencia': tendencia,
             'sentimento': sentiment
         }
         alerts = generate_smart_alerts(analysis_data)
@@ -378,16 +407,16 @@ def analyze(ticker):
         return {
             "ticker": ticker,
             "preco_atual": round(last_price, 2),
-            "previsao": round(forecast, 2),
-            "diferenca_preco_previsao": round(forecast - last_price, 2), # New field for clarity
+            "previsao": round(forecast_adjusted, 2),
+            "diferenca_preco_previsao": round(forecast_adjusted - last_price, 2),
             "media_movel_7": round(ma7, 2),
             "media_movel_15": round(ma15, 2),
             "media_movel_30": round(ma30, 2),
-            "tendencia": tendencia, # Use the new trend classification
-            "estrategia": strategy, # Include the determined strategy
+            "tendencia": tendencia,
+            "estrategia": strategy,
             "indicadores": {
-                "RSI": round(float(dados['RSI'].iloc[-1]), 2),
-                "MACD": round(float(dados['MACD'].iloc[-1]), 2),
+                "RSI": round(rsi, 2),
+                "MACD": round(macd, 2),
                 "Bollinger": {
                     "upper": round(float(dados['BB_upper'].iloc[-1]), 2),
                     "middle": round(float(dados['BB_middle'].iloc[-1]), 2),
