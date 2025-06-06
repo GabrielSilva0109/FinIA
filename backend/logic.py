@@ -301,29 +301,57 @@ def get_strategy(last_price, forecast, rsi, ma7, ma15, ma30, sentiment):
 
     return strategy
 
-def adjust_forecast_with_indicators(forecast, last_price, rsi, macd, ma7, ma15, ma30):
-    """
-    Ajusta a previsão do modelo com base em sinais dos indicadores técnicos.
-    """
+def adjust_forecast_with_indicators(
+    forecast, last_price, rsi, macd, ma7, ma15, ma30,
+    bb_upper=None, bb_lower=None, vwap=None, atr=None
+):
     adjustment = 0
 
-    # Exemplo de ajuste baseado no RSI
-    if rsi > 70:
-        adjustment -= 0.01 * last_price  # Reduz 1% se sobrecomprado
-    elif rsi < 30:
-        adjustment += 0.01 * last_price  # Aumenta 1% se sobrevendido
+    # Ajuste forte para tendência de baixa
+    if ma7 < ma15 < ma30:
+        adjustment -= 0.02 * last_price  # Reduz 2% se tendência de baixa forte
+        if macd < 0:
+            adjustment -= 0.01 * last_price  # Reduz mais 1% se MACD negativo
+        if vwap and last_price < vwap:
+            adjustment -= 0.005 * last_price  # Reduz mais se abaixo do VWAP
 
-    # Exemplo de ajuste baseado em médias móveis
+    # Ajuste forte para tendência de alta
     if ma7 > ma15 > ma30:
-        adjustment += 0.005 * last_price  # Tendência de alta, aumenta 0.5%
-    elif ma7 < ma15 < ma30:
-        adjustment -= 0.005 * last_price  # Tendência de baixa, reduz 0.5%
+        adjustment += 0.02 * last_price  # Aumenta 2% se tendência de alta forte
+        if macd > 0:
+            adjustment += 0.01 * last_price  # Aumenta mais 1% se MACD positivo
+        if vwap and last_price > vwap:
+            adjustment += 0.005 * last_price  # Aumenta mais se acima do VWAP
 
-    # Exemplo de ajuste baseado no MACD
-    if macd > 0:
+    # RSI
+    if rsi > 70:
+        adjustment -= 0.01 * last_price
+    elif rsi < 30:
+        adjustment += 0.01 * last_price
+
+    # MACD isolado (caso não tenha entrado acima)
+    if macd > 0 and not (ma7 > ma15 > ma30):
         adjustment += 0.003 * last_price
-    else:
+    elif macd < 0 and not (ma7 < ma15 < ma30):
         adjustment -= 0.003 * last_price
+
+    # Bollinger Bands
+    if bb_upper and last_price > bb_upper:
+        adjustment -= 0.005 * last_price
+    if bb_lower and last_price < bb_lower:
+        adjustment += 0.005 * last_price
+
+    # ATR (volatilidade)
+    if atr and atr > last_price * 0.03:
+        adjustment -= 0.002 * last_price
+
+    # Garante que, se tendência for de baixa forte, a previsão não fique acima do preço atual
+    if ma7 < ma15 < ma30 and (forecast + adjustment) > last_price:
+        adjustment = min(adjustment, last_price - forecast - 0.01)
+
+    # Garante que, se tendência for de alta forte, a previsão não fique abaixo do preço atual
+    if ma7 > ma15 > ma30 and (forecast + adjustment) < last_price:
+        adjustment = max(adjustment, last_price - forecast + 0.01)
 
     return forecast + adjustment
 
