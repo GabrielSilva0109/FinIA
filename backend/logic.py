@@ -513,7 +513,7 @@ def analyze_all():
                 "media_movel_30": media_movel_30,
                 "diferenca": diferenca,
                 "tendencia": resultado["tendencia"],
-                "sentimento": resultado["sentiment_analysis"], # Changed to sentiment_analysis
+                "sentimento": resultado["sentiment_analysis"],
                 "estrategia": resultado["estrategia"]
             })
 
