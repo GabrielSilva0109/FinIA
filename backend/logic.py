@@ -473,7 +473,7 @@ def analyze(ticker):
     
 def analyze_all():
     try:
-        # Fallback para pegar as ações do Ibovespa via scraping
+        # Pega as ações do Ibovespa via scraping
         url = "https://finance.yahoo.com/quote/%5EBVSP/components?p=%5EBVSP"
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers)
@@ -497,33 +497,30 @@ def analyze_all():
             if "erro" in resultado:
                 continue
 
-            preco_atual = resultado["preco_atual"]
-            previsao = resultado["previsao"]
-            diferenca = previsao - preco_atual
-            media_movel_7 = resultado["media_movel_7"]
-            media_movel_15 = resultado["media_movel_15"]
-            media_movel_30 = resultado["media_movel_30"]
-
+            # Garante que todos os campos necessários estão presentes
             resultados.append({
                 "ticker": ticker,
-                "preco_atual": preco_atual,
-                "previsao": previsao,
-                "media_movel_7": media_movel_7,
-                "media_movel_15": media_movel_15,
-                "media_movel_30": media_movel_30,
-                "diferenca": diferenca,
-                "tendencia": resultado["tendencia"],
-                "sentimento": resultado["sentiment_analysis"],
-                "estrategia": resultado["estrategia"]
+                "preco_atual": resultado.get("preco_atual"),
+                "previsao": resultado.get("previsao"),
+                "media_movel_7": resultado.get("media_movel_7"),
+                "media_movel_15": resultado.get("media_movel_15"),
+                "media_movel_30": resultado.get("media_movel_30"),
+                "diferenca": resultado.get("diferenca_preco_previsao"),
+                "tendencia": resultado.get("tendencia"),
+                "sentimento": resultado.get("sentiment_analysis"),
+                "estrategia": resultado.get("estrategia")
             })
 
+        # Remove resultados incompletos
+        resultados = [r for r in resultados if r["diferenca"] is not None]
+
         # Ordena por diferença de previsão - preço atual
-        oportunidades = sorted(resultados, key=lambda x: x["diferenca"], reverse=True)[:5]
-        quedas = sorted(resultados, key=lambda x: x["diferenca"])[:5]
+        melhores = sorted(resultados, key=lambda x: x["diferenca"], reverse=True)[:5]
+        piores = sorted(resultados, key=lambda x: x["diferenca"])[:5]
 
         return {
-            "melhores_oportunidades": oportunidades,
-            "maiores_quedas": quedas
+            "melhores_oportunidades": melhores,
+            "piores_oportunidades": piores
         }
 
     except Exception as e:
