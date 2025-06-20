@@ -90,8 +90,6 @@ def plot_all(df, symbol, save=False):
         fig.write_html(f'{symbol}_plotly.html')
     fig.show()
 
-
-
     plt.figure(figsize=(16, 12))
     plt.subplot(4, 1, 1)
     plt.plot(df['close'], label='Close')
