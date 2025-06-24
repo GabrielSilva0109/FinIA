@@ -112,6 +112,7 @@ def compute_stochastic_oscillator(df, k_window=14, d_window=3):
     df['%D'] = df['%K'].rolling(window=d_window).mean()
     return df['%K'], df['%D']
 
+
 def compute_atr(df, window=14):
     high_low = df['High'] - df['Low']
     high_close = np.abs(df['High'] - df['Close'].shift())
