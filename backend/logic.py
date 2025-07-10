@@ -527,3 +527,18 @@ def analyze_all():
     except Exception as e:
         logger.error(f"Erro ao analisar todas as ações: {str(e)}", exc_info=True)
         return {"erro": str(e)}
+    
+def price_ticker(ticker: str):
+    try:
+        data = yf.download(ticker, period="1d", interval="1m", progress=False)
+        if data.empty:
+            return {"erro": "Ticker inválido ou sem dados"}
+        preco_atual = float(data['Close'][-1])
+        return {
+            "ticker": ticker,
+            "preco_atual": round(preco_atual, 2)
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()  # Mostra o erro no terminal
+        return {"erro": f"Erro ao buscar preço: {str(e)}"}

@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse  # <- faltava isso
 import requests  # <- e isso também
 import yfinance as yf
 from typing import Optional
-from logic import analyze, analyze_all
+from logic import analyze, analyze_all, price_ticker
 
 app = FastAPI()
 
@@ -31,7 +31,6 @@ def analisar_todos():
     resultado = analyze_all()
     return resultado
 
-
 @app.get("/api/yahoo/{symbol}")
 def yahoo_finance(symbol: str):
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -43,3 +42,7 @@ def yahoo_finance(symbol: str):
     except Exception as e:
         return JSONResponse(content={"error": "Erro ao buscar dados"}, status_code=500)
 
+@app.get("/preco/{symbol}")
+def price(symbol: str):  
+    res = price_ticker(symbol) 
+    return res

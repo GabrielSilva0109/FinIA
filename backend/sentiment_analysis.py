@@ -158,17 +158,16 @@ def enhanced_sentiment_analysis(ticker):
     sources = [
         # (URL formatada, parser, tag da manchete, atributo da manchete, valor do atributo)
         # Lembre-se: o '{query}' será preenchido com o `ticker` ou `company_name`
-        (f"https://www.infomoney.com.br/?s={company_name}", "html.parser", "a", "class", "hl-title"),
-        (f"https://exame.com/?s={company_name}", "html.parser", "a", "class", "title"),
+        # (f"https://www.infomoney.com.br/?s={company_name}", "html.parser", "a", "class", "hl-title"),
+        # (f"https://exame.com/?s={company_name}", "html.parser", "a", "class", "title"),
         (f"https://br.investing.com/search/?q={company_name}", "html.parser", "a", "class", "title"),
-        (f"https://busca.uol.com.br/?q={company_name}", "html.parser", "a", "class", "thumb-caption"),
-        (f"https://busca.estadao.com.br/?q={company_name}", "html.parser", "a", "class", "resultado"),
-        # Yahoo Finance (pode exigir ajustes específicos se o lookup não funcionar bem)
-        (f"https://br.financas.yahoo.com/lookup?s={ticker}", "html.parser", "a", "class", "Fz(16px)"),
-        (f"https://www.seudinheiro.com/?s={company_name}", "html.parser", "a", "class", "post-title"),
-        (f"https://www.suno.com.br/noticias/?s={company_name}", "html.parser", "a", "class", "entry-title"),
-        (f"https://www.moneytimes.com.br/?s={company_name}", "html.parser", "h2", "class", "card-title"),
-        (f"https://www.investnews.com.br/?s={company_name}", "html.parser", "h3", "class", "noticia-title"),
+        # (f"https://busca.uol.com.br/?q={company_name}", "html.parser", "a", "class", "thumb-caption"),
+        # (f"https://busca.estadao.com.br/?q={company_name}", "html.parser", "a", "class", "resultado"),
+        # (f"https://br.financas.yahoo.com/lookup?s={ticker}", "html.parser", "a", "class", "Fz(16px)"),
+        # (f"https://www.seudinheiro.com/?s={company_name}", "html.parser", "a", "class", "post-title"),
+        # (f"https://www.suno.com.br/noticias/?s={company_name}", "html.parser", "a", "class", "entry-title"),
+        # (f"https://www.moneytimes.com.br/?s={company_name}", "html.parser", "h2", "class", "card-title"),
+        # (f"https://www.investnews.com.br/?s={company_name}", "html.parser", "h3", "class", "noticia-title"),
     ]
 
     all_headlines_data = []
