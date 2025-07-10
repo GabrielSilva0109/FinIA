@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse  # <- faltava isso
+import requests  # <- e isso também
 import yfinance as yf
 from typing import Optional
 from logic import analyze, analyze_all
@@ -28,3 +30,16 @@ def analisar_ativo(ticker: str = Query(..., description="Código da ação, ex: 
 def analisar_todos():
     resultado = analyze_all()
     return resultado
+
+
+@app.get("/api/yahoo/{symbol}")
+def yahoo_finance(symbol: str):
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        return JSONResponse(content=data)
+    except Exception as e:
+        return JSONResponse(content={"error": "Erro ao buscar dados"}, status_code=500)
+
