@@ -26,7 +26,7 @@ app = FastAPI(
 # Configuração de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],  # Permitir todas as origens temporariamente
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -230,6 +230,27 @@ def get_crypto_info(coin_id: str):
     except Exception as e:
         logger.error(f"Erro ao obter info de {coin_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+@app.post("/generate-chart")
+def generate_financial_chart(request: dict):
+    """Gera gráfico financeiro com previsões ML."""
+    try:
+        from logic import generate_chart
+        
+        ticker = request.get('ticker', '').upper().strip()
+        days_forecast = request.get('days_forecast', 15)
+        chart_type = request.get('chart_type', 'candlestick')
+        
+        if not ticker:
+            raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
+        
+        logger.info(f"Gerando gráfico para: {ticker}")
+        result = generate_chart(ticker, days_forecast, chart_type)
+        logger.info(f"Gráfico gerado para {ticker}")
+        return result
+    except Exception as e:
+        logger.error(f"Erro ao gerar gráfico: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar gráfico: {str(e)}")
 
 
 if __name__ == "__main__":
