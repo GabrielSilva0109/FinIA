@@ -7,7 +7,7 @@ from typing import Optional
 import logging
 from datetime import datetime
 from models import TickerRequest, AnalysisResponse, ErrorResponse
-from logic import financial_analyzer
+from logic import analyzer
 from logic_crypto import crypto_analyzer
 from config import settings
 
@@ -62,7 +62,7 @@ def analisar_ativo(ticker: str = Query(..., description="Código da ação, ex: 
         if not ticker or ticker.strip() == "":
             raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
         
-        resultado = financial_analyzer.analyze_single_stock(ticker.upper().strip())
+        resultado = analyzer.analyze_single_stock(ticker.upper().strip())
         logger.info(f"Análise realizada para ticker: {ticker}")
         return resultado
     except Exception as e:
@@ -230,3 +230,8 @@ def get_crypto_info(coin_id: str):
     except Exception as e:
         logger.error(f"Erro ao obter info de {coin_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
