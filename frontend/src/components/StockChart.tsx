@@ -61,8 +61,11 @@ const StockChart: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchChart();
-  }, []);
+    if (ticker.trim()) {
+      fetchChart();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker, daysForecast]);
 
   const getRecommendationColor = (recommendation: string) => {
     switch (recommendation?.toUpperCase()) {
