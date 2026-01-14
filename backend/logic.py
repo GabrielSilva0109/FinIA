@@ -739,6 +739,114 @@ class FinancialAnalyzer:
                 'trend': 'neutro'
             }
     
+    def generate_chart_data(self, ticker: str, days_forecast: int = 10) -> Dict[str, Any]:
+        """
+        Gera dados estruturados para gráficos no frontend (sem imagem).
+        
+        Returns:
+            Dict com dados históricos, previsões e análises
+        """
+        try:
+            # Obter dados históricos estendidos
+            stock_data = self._get_stock_data(ticker, period="6mo")
+            
+            if stock_data.empty:
+                return {"erro": "Dados não encontrados"}
+            
+            # Realizar análise para obter previsões
+            technical_analysis = self._technical_analysis(stock_data)
+            fundamental_analysis = self._fundamental_analysis(ticker)
+            ml_analysis = self._ml_analysis(stock_data, ticker)
+            sentiment_analysis = self._sentiment_analysis(ticker)
+            
+            analysis = self._combine_analyses(
+                ticker, stock_data, technical_analysis, 
+                fundamental_analysis, ml_analysis, sentiment_analysis
+            )
+            ml_data = analysis.get('analise_ml', {})
+            
+            # Gerar previsões futuras
+            future_predictions = self._generate_future_predictions(stock_data, ml_data, days_forecast)
+            
+            # Preparar dados históricos (últimos 90 dias)
+            days_to_show = min(90, len(stock_data))
+            historical_data = stock_data.iloc[-days_to_show:].copy()
+            
+            # Converter dados para formato JSON-friendly
+            chart_data = []
+            for i in range(len(historical_data)):
+                chart_data.append({
+                    "date": historical_data.index[i].strftime('%Y-%m-%d'),
+                    "timestamp": int(historical_data.index[i].timestamp() * 1000),
+                    "open": float(historical_data['Open'].iloc[i]),
+                    "high": float(historical_data['High'].iloc[i]),
+                    "low": float(historical_data['Low'].iloc[i]),
+                    "close": float(historical_data['Close'].iloc[i]),
+                    "volume": int(historical_data['Volume'].iloc[i]),
+                    "ma7": float(historical_data['MA7'].iloc[i]) if 'MA7' in historical_data.columns else None,
+                    "ma15": float(historical_data['MA15'].iloc[i]) if 'MA15' in historical_data.columns else None,
+                    "ma30": float(historical_data['MA30'].iloc[i]) if 'MA30' in historical_data.columns else None,
+                    "rsi": float(historical_data['RSI'].iloc[i]) if 'RSI' in historical_data.columns else None,
+                    "macd": float(historical_data['MACD'].iloc[i]) if 'MACD' in historical_data.columns else None,
+                    "bb_upper": float(historical_data['BB_upper'].iloc[i]) if 'BB_upper' in historical_data.columns else None,
+                    "bb_lower": float(historical_data['BB_lower'].iloc[i]) if 'BB_lower' in historical_data.columns else None,
+                    "bb_middle": float(historical_data['BB_middle'].iloc[i]) if 'BB_middle' in historical_data.columns else None,
+                })
+            
+            # Preparar dados de previsão
+            prediction_data = []
+            for i in range(len(future_predictions['dates'])):
+                prediction_data.append({
+                    "date": future_predictions['dates'][i].strftime('%Y-%m-%d'),
+                    "timestamp": int(future_predictions['dates'][i].timestamp() * 1000),
+                    "predicted_price": float(future_predictions['prices'][i]),
+                    "confidence_upper": float(future_predictions['confidence_upper'][i]),
+                    "confidence_lower": float(future_predictions['confidence_lower'][i])
+                })
+            
+            # Preparar indicadores atuais
+            current_indicators = {}
+            if len(historical_data) > 0:
+                last_row = historical_data.iloc[-1]
+                current_indicators = {
+                    "RSI": float(last_row['RSI']) if 'RSI' in last_row and pd.notna(last_row['RSI']) else None,
+                    "MACD": float(last_row['MACD']) if 'MACD' in last_row and pd.notna(last_row['MACD']) else None,
+                    "Williams_R": float(last_row['Williams_R']) if 'Williams_R' in last_row and pd.notna(last_row['Williams_R']) else None,
+                    "CCI": float(last_row['CCI']) if 'CCI' in last_row and pd.notna(last_row['CCI']) else None,
+                    "BB_position": float(last_row['BB_position']) if 'BB_position' in last_row and pd.notna(last_row['BB_position']) else None,
+                    "volatility": float(last_row['volatilidade']) if 'volatilidade' in last_row and pd.notna(last_row['volatilidade']) else None,
+                    "volume": int(last_row['Volume']) if pd.notna(last_row['Volume']) else None
+                }
+            
+            # Dados de preço
+            current_price = float(historical_data['Close'].iloc[-1])
+            predicted_price = float(future_predictions['prices'][-1])
+            price_change = ((predicted_price / current_price) - 1) * 100
+            
+            return {
+                "ticker": ticker,
+                "timestamp": datetime.now().isoformat(),
+                "historical_data": chart_data,
+                "prediction_data": prediction_data,
+                "analysis": {
+                    "recommendation": analysis.get("recomendacao_final"),
+                    "confidence": analysis.get("confianca"),
+                    "current_price": current_price,
+                    "predicted_price": predicted_price,
+                    "price_change_percent": float(price_change),
+                    "trend": ml_data.get('trend_prediction', 'neutro')
+                },
+                "indicators": current_indicators,
+                "risk_management": ml_data.get('risk_management', {}),
+                "days_forecast": days_forecast,
+                "data_points": len(chart_data)
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro ao gerar dados do gráfico para {ticker}: {e}")
+            return {"erro": f"Falha ao gerar dados: {str(e)}"}
+
+    # Manter o método antigo para compatibilidade
     def generate_financial_chart(self, ticker: str, days_forecast: int = 10, chart_type: str = "candlestick") -> Dict[str, Any]:
         """
         Gera gráfico financeiro com previsões futuras.
@@ -1013,6 +1121,12 @@ def price_ticker(ticker: str) -> Dict[str, Any]:
         return {"erro": str(e)}
 
 
+def generate_chart_data(ticker: str, days_forecast: int = 10) -> Dict[str, Any]:
+    """Função global para gerar apenas dados (sem imagem)."""
+    analyzer = FinancialAnalyzer()
+    return analyzer.generate_chart_data(ticker, days_forecast)
+
 def generate_chart(ticker: str, days_forecast: int = 10, chart_type: str = "candlestick") -> Dict[str, Any]:
-    """Função de conveniência para gerar gráficos."""
+    """Função de conveniência para gerar gráficos com imagem."""
+    analyzer = FinancialAnalyzer()
     return analyzer.generate_financial_chart(ticker, days_forecast, chart_type)

@@ -20,6 +20,11 @@ class Settings:
     # Cache
     CACHE_TTL: int = 300  # 5 minutos
     
+    # Exchange API (opcional para crypto)
+    EXCHANGE_API_KEY: Optional[str] = os.getenv("EXCHANGE_API_KEY")
+    EXCHANGE_SECRET: Optional[str] = os.getenv("EXCHANGE_SECRET")
+    EXCHANGE_SECRET_KEY: Optional[str] = os.getenv("EXCHANGE_SECRET_KEY")
+    
     # Limites de dados
     MAX_HISTORICAL_DAYS: int = 365
     MIN_VOLUME_THRESHOLD: float = 10000

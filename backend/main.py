@@ -231,9 +231,29 @@ def get_crypto_info(coin_id: str):
         logger.error(f"Erro ao obter info de {coin_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
+@app.post("/chart-data")
+def get_chart_data(request: dict):
+    """Gera dados estruturados para gráficos no frontend (sem imagem)."""
+    try:
+        from logic import generate_chart_data
+        
+        ticker = request.get('ticker', '').upper().strip()
+        days_forecast = request.get('days_forecast', 15)
+        
+        if not ticker:
+            raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
+        
+        logger.info(f"Gerando dados de gráfico para: {ticker}")
+        result = generate_chart_data(ticker, days_forecast)
+        logger.info(f"Dados gerados para {ticker}")
+        return result
+    except Exception as e:
+        logger.error(f"Erro ao gerar dados de gráfico: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar dados: {str(e)}")
+
 @app.post("/generate-chart")
 def generate_financial_chart(request: dict):
-    """Gera gráfico financeiro com previsões ML."""
+    """Gera gráfico financeiro com previsões ML (com imagem)."""
     try:
         from logic import generate_chart
         

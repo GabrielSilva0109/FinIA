@@ -1,9 +1,75 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { TrendingUp, TrendingDown, BarChart3, RefreshCw, AlertCircle } from 'lucide-react';
+
+// Substituindo os componentes ShadCN por componentes simples
+const Card: React.FC<{children: React.ReactNode, className?: string}> = ({children, className = ''}) => (
+  <div className={`card ${className}`}>{children}</div>
+);
+
+const CardContent: React.FC<{children: React.ReactNode, className?: string}> = ({children, className = ''}) => (
+  <div className={`card-content ${className}`}>{children}</div>
+);
+
+const CardHeader: React.FC<{children: React.ReactNode, className?: string}> = ({children, className = ''}) => (
+  <div className={`card-header ${className}`}>{children}</div>
+);
+
+const CardTitle: React.FC<{children: React.ReactNode, className?: string}> = ({children, className = ''}) => (
+  <h3 className={`card-title ${className}`}>{children}</h3>
+);
+
+const CardDescription: React.FC<{children: React.ReactNode, className?: string}> = ({children, className = ''}) => (
+  <p className={`card-description ${className}`}>{children}</p>
+);
+
+const Button: React.FC<{children: React.ReactNode, onClick?: () => void, disabled?: boolean, className?: string}> = 
+  ({children, onClick, disabled = false, className = ''}) => (
+  <button className={`btn btn-primary ${className}`} onClick={onClick} disabled={disabled}>
+    {children}
+  </button>
+);
+
+const Input: React.FC<{type?: string, placeholder?: string, value?: string | number, onChange?: (e: any) => void, className?: string}> = 
+  ({type = 'text', placeholder, value, onChange, className = ''}) => (
+  <input 
+    type={type} 
+    placeholder={placeholder} 
+    value={value} 
+    onChange={onChange}
+    className={`input ${className}`}
+  />
+);
+
+// Ícones simples usando SVG
+const TrendingUp = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+  </svg>
+);
+
+const TrendingDown = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+  </svg>
+);
+
+const BarChart3 = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+  </svg>
+);
+
+const RefreshCw = ({className}: {className?: string}) => (
+  <svg className={`h-4 w-4 ${className}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+  </svg>
+);
+
+const AlertCircle = () => (
+  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
 
 interface AnalysisSummary {
   current_price: number;
@@ -84,24 +150,24 @@ const StockChart: React.FC = () => {
     switch (recommendation?.toUpperCase()) {
       case 'COMPRA':
       case 'COMPRA FORTE':
-        return <TrendingUp className="h-4 w-4" />;
+        return <span style={{color: 'green', fontSize: '18px'}}>📈</span>;
       case 'VENDA':
       case 'VENDA FORTE':
-        return <TrendingDown className="h-4 w-4" />;
+        return <span style={{color: 'red', fontSize: '18px'}}>📉</span>;
       default:
-        return <BarChart3 className="h-4 w-4" />;
+        return <span style={{color: '#ca8a04', fontSize: '18px'}}>📊</span>;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="container">
+      <div style={{display: 'flex', flexDirection: 'column', gap: '24px'}}>
         
         {/* Header */}
         <Card className="bg-white/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-              <BarChart3 className="h-8 w-8 text-blue-600" />
+            <CardTitle className="header-title">
+              <span style={{fontSize: '24px', marginRight: '12px'}}>📊</span>
               IA-Bot Financial Analysis
             </CardTitle>
             <CardDescription className="text-lg text-gray-600">
@@ -112,66 +178,62 @@ const StockChart: React.FC = () => {
 
         {/* Controls */}
         <Card className="bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Símbolo da Ação</label>
+          <CardContent>
+            <div className="form-group">
+              <div className="input-group">
+                <label className="label">Símbolo da Ação</label>
                 <Input
                   type="text"
                   placeholder="Ex: AAPL, TSLA, MSFT..."
                   value={ticker}
                   onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                  className="w-40"
+                  className="input"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Dias de Previsão</label>
-                <Input
+              <div className="input-group">
+                <label className="label">Dias de Previsão</label>
+                <input
                   type="number"
                   min="1"
                   max="30"
                   value={daysForecast}
                   onChange={(e) => setDaysForecast(Number(e.target.value))}
-                  className="w-32"
+                  className="input"
                 />
               </div>
-              <Button 
+              <button 
                 onClick={fetchChart}
                 disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="btn btn-primary"
               >
                 {loading ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  <span className="loading-spinner">⟳</span>
                 ) : (
-                  <BarChart3 className="h-4 w-4 mr-2" />
+                  <span>📊</span>
                 )}
                 {loading ? 'Gerando...' : 'Analisar'}
-              </Button>
+              </button>
             </div>
           </CardContent>
         </Card>
 
         {/* Error */}
         {error && (
-          <Card className="bg-red-50 border-red-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-red-600">
-                <AlertCircle className="h-5 w-5" />
-                <span className="font-medium">{error}</span>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="error-card">
+            <span>⚠️</span>
+            <span>{error}</span>
+          </div>
         )}
 
         {/* Chart and Analysis */}
         {chartData && !chartData.erro && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-3">
             
             {/* Main Chart */}
-            <div className="lg:col-span-2">
-              <Card className="bg-white/90 backdrop-blur-sm">
+            <div>
+              <Card>
                 <CardHeader>
-                  <CardTitle className="text-xl">
+                  <CardTitle>
                     {ticker} - Análise Técnica com Previsões ML
                   </CardTitle>
                   <CardDescription>
@@ -179,11 +241,10 @@ const StockChart: React.FC = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="w-full">
+                  <div className="chart-container">
                     <img 
                       src={chartData.chart_url}
                       alt={`Gráfico ${ticker}`}
-                      className="w-full h-auto rounded-lg shadow-lg"
                     />
                   </div>
                 </CardContent>
@@ -191,21 +252,21 @@ const StockChart: React.FC = () => {
             </div>
 
             {/* Analysis Panel */}
-            <div className="space-y-4">
+            <div className="analysis-panel">
               
               {/* Recommendation */}
-              <Card className="bg-white/90 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Recomendação</CardTitle>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recomendação</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className={`flex items-center gap-3 p-4 rounded-lg ${getRecommendationColor(chartData.analysis_summary.recommendation)}`}>
+                  <div className={`recommendation-card ${getRecommendationColor(chartData.analysis_summary.recommendation)}`}>
                     {getRecommendationIcon(chartData.analysis_summary.recommendation)}
                     <div>
-                      <div className="font-bold text-lg">
+                      <div style={{fontWeight: 'bold', fontSize: '1.1rem'}}>
                         {chartData.analysis_summary.recommendation}
                       </div>
-                      <div className="text-sm opacity-75">
+                      <div style={{fontSize: '0.875rem', opacity: 0.75}}>
                         Confiança: {chartData.analysis_summary.confidence}%
                       </div>
                     </div>
@@ -214,41 +275,39 @@ const StockChart: React.FC = () => {
               </Card>
 
               {/* Price Analysis */}
-              <Card className="bg-white/90 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Análise de Preços</CardTitle>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Análise de Preços</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Preço Atual</div>
-                      <div className="text-xl font-bold text-blue-600">
+                <CardContent>
+                  <div className="metrics-grid">
+                    <div className="metric-card" style={{background: '#dbeafe'}}>
+                      <div className="metric-label">Preço Atual</div>
+                      <div className="metric-value" style={{color: '#3b82f6'}}>
                         ${chartData.analysis_summary.current_price.toFixed(2)}
                       </div>
                     </div>
-                    <div className="text-center p-3 bg-green-50 rounded-lg">
-                      <div className="text-sm text-gray-600">Previsão {daysForecast}d</div>
-                      <div className="text-xl font-bold text-green-600">
+                    <div className="metric-card" style={{background: '#dcfce7'}}>
+                      <div className="metric-label">Previsão {daysForecast}d</div>
+                      <div className="metric-value" style={{color: '#16a34a'}}>
                         ${chartData.analysis_summary.predicted_price.toFixed(2)}
                       </div>
                     </div>
                   </div>
                   
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600">Variação Esperada</div>
-                    <div className={`text-xl font-bold ${
-                      chartData.analysis_summary.price_change_percent >= 0 
-                        ? 'text-green-600' 
-                        : 'text-red-600'
-                    }`}>
+                  <div className="metric-card" style={{background: '#f9fafb', marginTop: '12px'}}>
+                    <div className="metric-label">Variação Esperada</div>
+                    <div className={`metric-value`} style={{
+                      color: chartData.analysis_summary.price_change_percent >= 0 ? '#16a34a' : '#dc2626'
+                    }}>
                       {chartData.analysis_summary.price_change_percent > 0 ? '+' : ''}
                       {chartData.analysis_summary.price_change_percent.toFixed(1)}%
                     </div>
                   </div>
 
-                  <div className="text-center p-3 bg-purple-50 rounded-lg">
-                    <div className="text-sm text-gray-600">Tendência ML</div>
-                    <div className="font-semibold text-purple-600">
+                  <div className="metric-card" style={{background: '#faf5ff', marginTop: '12px'}}>
+                    <div className="metric-label">Tendência ML</div>
+                    <div className="metric-value" style={{color: '#9333ea'}}>
                       {chartData.analysis_summary.trend}
                     </div>
                   </div>
@@ -256,49 +315,51 @@ const StockChart: React.FC = () => {
               </Card>
 
               {/* Technical Indicators */}
-              <Card className="bg-white/90 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Indicadores Técnicos</CardTitle>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Indicadores Técnicos</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">RSI</span>
-                    <span className={`font-medium ${
-                      chartData.technical_indicators.RSI > 70 ? 'text-red-600' :
-                      chartData.technical_indicators.RSI < 30 ? 'text-green-600' : 'text-gray-800'
-                    }`}>
-                      {chartData.technical_indicators.RSI.toFixed(1)}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">MACD</span>
-                    <span className={`font-medium ${
-                      chartData.technical_indicators.MACD > 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {chartData.technical_indicators.MACD.toFixed(3)}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Williams %R</span>
-                    <span className="font-medium text-gray-800">
-                      {chartData.technical_indicators.Williams_R.toFixed(1)}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Bollinger Position</span>
-                    <span className="font-medium text-gray-800">
-                      {chartData.technical_indicators.BB_position.toFixed(2)}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Volatilidade</span>
-                    <span className="font-medium text-gray-800">
-                      {(chartData.technical_indicators.volatility * 100).toFixed(2)}%
-                    </span>
+                <CardContent>
+                  <div className="indicators-list">
+                    <div className="indicator-row">
+                      <span className="indicator-label">RSI</span>
+                      <span className="indicator-value" style={{
+                        color: chartData.technical_indicators.RSI > 70 ? '#dc2626' :
+                               chartData.technical_indicators.RSI < 30 ? '#16a34a' : '#374151'
+                      }}>
+                        {chartData.technical_indicators.RSI.toFixed(1)}
+                      </span>
+                    </div>
+                    
+                    <div className="indicator-row">
+                      <span className="indicator-label">MACD</span>
+                      <span className="indicator-value" style={{
+                        color: chartData.technical_indicators.MACD > 0 ? '#16a34a' : '#dc2626'
+                      }}>
+                        {chartData.technical_indicators.MACD.toFixed(3)}
+                      </span>
+                    </div>
+                    
+                    <div className="indicator-row">
+                      <span className="indicator-label">Williams %R</span>
+                      <span className="indicator-value">
+                        {chartData.technical_indicators.Williams_R.toFixed(1)}
+                      </span>
+                    </div>
+                    
+                    <div className="indicator-row">
+                      <span className="indicator-label">Bollinger Position</span>
+                      <span className="indicator-value">
+                        {chartData.technical_indicators.BB_position.toFixed(2)}
+                      </span>
+                    </div>
+                    
+                    <div className="indicator-row">
+                      <span className="indicator-label">Volatilidade</span>
+                      <span className="indicator-value">
+                        {(chartData.technical_indicators.volatility * 100).toFixed(2)}%
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
