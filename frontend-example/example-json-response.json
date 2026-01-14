@@ -1,0 +1,178 @@
+{
+  "ticker": "AAPL",
+  "timestamp": "2026-01-14T18:17:39.985450",
+  
+  "historical_data": [
+    {
+      "date": "2025-09-08",
+      "timestamp": 1757304000000,
+      "open": 239.07,
+      "high": 239.92,
+      "low": 236.11,
+      "close": 237.65,
+      "volume": 48999500,
+      "ma7": 235.52,
+      "ma15": 231.60,
+      "ma30": 224.54,
+      "rsi": 61.79,
+      "macd": 4.48,
+      "bb_upper": 240.19,
+      "bb_lower": 222.55,
+      "bb_middle": 231.37
+    },
+    {
+      "date": "2025-09-09", 
+      "timestamp": 1757390400000,
+      "open": 236.77,
+      "high": 238.55,
+      "low": 233.13,
+      "close": 234.12,
+      "volume": 66313900,
+      "ma7": 235.78,
+      "ma15": 231.83,
+      "ma30": 225.22,
+      "rsi": 55.77,
+      "macd": 4.18,
+      "bb_upper": 240.37,
+      "bb_lower": 223.08,
+      "bb_middle": 231.73
+    },
+    {
+      "date": "2025-09-10",
+      "timestamp": 1757476800000,
+      "open": 231.97,
+      "high": 232.19,
+      "low": 225.73,
+      "close": 226.57,
+      "volume": 83440800,
+      "ma7": 235.01,
+      "ma15": 231.58,
+      "ma30": 225.75,
+      "rsi": 51.09,
+      "macd": 3.31,
+      "bb_upper": 240.48,
+      "bb_lower": 222.69,
+      "bb_middle": 231.58
+    }
+  ],
+  
+  "prediction_data": [
+    {
+      "date": "2026-01-15",
+      "timestamp": 1772352000000,
+      "price": 233.45
+    },
+    {
+      "date": "2026-01-16", 
+      "timestamp": 1772438400000,
+      "price": 234.12
+    },
+    {
+      "date": "2026-01-17",
+      "timestamp": 1772524800000,
+      "price": 235.78
+    }
+  ],
+  
+  "analysis": {
+    "current_price": 232.89,
+    "price_change": -1.25,
+    "percent_change": -0.53,
+    "recommendation": "VENDA",
+    "trend": "BAIXA",
+    "confidence": 0.75,
+    "volume_avg": 58987633,
+    "volatility": 0.023
+  },
+  
+  "indicators": [
+    {
+      "name": "RSI",
+      "value": "45.32",
+      "signal": "NEUTRO",
+      "description": "Índice de Força Relativa"
+    },
+    {
+      "name": "MACD", 
+      "value": "2.15",
+      "signal": "COMPRA",
+      "description": "MACD - Convergência/Divergência"
+    },
+    {
+      "name": "Williams %R",
+      "value": "-65.4",
+      "signal": "NEUTRO",
+      "description": "Williams Percent Range"
+    },
+    {
+      "name": "CCI",
+      "value": "125.5",
+      "signal": "COMPRA",
+      "description": "Commodity Channel Index"
+    },
+    {
+      "name": "OBV",
+      "value": "1250000000",
+      "signal": "ALTA",
+      "description": "On-Balance Volume"
+    },
+    {
+      "name": "ROC",
+      "value": "3.2",
+      "signal": "ALTA", 
+      "description": "Rate of Change"
+    },
+    {
+      "name": "VWAP",
+      "value": "231.45",
+      "signal": "NEUTRO",
+      "description": "Volume Weighted Average Price"
+    },
+    {
+      "name": "Bollinger Upper",
+      "value": "240.50",
+      "signal": "RESISTENCIA",
+      "description": "Banda Superior de Bollinger"
+    },
+    {
+      "name": "Bollinger Lower", 
+      "value": "222.80",
+      "signal": "SUPORTE",
+      "description": "Banda Inferior de Bollinger"
+    },
+    {
+      "name": "SMA 20",
+      "value": "231.65",
+      "signal": "NEUTRO",
+      "description": "Média Móvel Simples 20 períodos"
+    },
+    {
+      "name": "SMA 50",
+      "value": "228.30",
+      "signal": "ALTA",
+      "description": "Média Móvel Simples 50 períodos"
+    },
+    {
+      "name": "Volume",
+      "value": "58987633",
+      "signal": "NORMAL",
+      "description": "Volume médio de negociação"
+    },
+    {
+      "name": "Volatilidade",
+      "value": "2.3%",
+      "signal": "BAIXA",
+      "description": "Volatilidade dos preços"
+    }
+  ],
+  
+  "metadata": {
+    "data_points": 90,
+    
+    "predictions": 3,
+    "period": "6 meses",
+    "last_update": "2026-01-14T18:17:39.985450",
+    "source": "Yahoo Finance",
+    "ml_model": "Linear Regression + Random Forest"
+  }
+}
