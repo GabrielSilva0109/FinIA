@@ -55,25 +55,25 @@ class AdvancedMLModels:
         features = pd.DataFrame()
         
         # Preços básicos
-        features['price'] = data['Close']
-        features['volume'] = data['Volume']
+        features['price'] = data['close']
+        features['volume'] = data['volume']
         
         # Returns
-        features['return_1d'] = data['Close'].pct_change(1)
-        features['return_5d'] = data['Close'].pct_change(5)
-        features['return_10d'] = data['Close'].pct_change(10)
+        features['return_1d'] = data['close'].pct_change(1)
+        features['return_5d'] = data['close'].pct_change(5)
+        features['return_10d'] = data['close'].pct_change(10)
         
         # Médias móveis
         for period in [5, 10, 20, 50]:
-            features[f'ma_{period}'] = data['Close'].rolling(period).mean()
-            features[f'price_to_ma_{period}'] = data['Close'] / features[f'ma_{period}']
+            features[f'ma_{period}'] = data['close'].rolling(period).mean()
+            features[f'price_to_ma_{period}'] = data['close'] / features[f'ma_{period}']
         
         # Volatilidade
-        features['volatility_10d'] = data['Close'].rolling(10).std()
-        features['volatility_20d'] = data['Close'].rolling(20).std()
+        features['volatility_10d'] = data['close'].rolling(10).std()
+        features['volatility_20d'] = data['close'].rolling(20).std()
         
         # RSI
-        delta = data['Close'].diff()
+        delta = data['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
@@ -82,36 +82,36 @@ class AdvancedMLModels:
         # Bollinger Bands
         bb_period = 20
         bb_std = 2
-        bb_ma = data['Close'].rolling(bb_period).mean()
-        bb_std_dev = data['Close'].rolling(bb_period).std()
+        bb_ma = data['close'].rolling(bb_period).mean()
+        bb_std_dev = data['close'].rolling(bb_period).std()
         features['bb_upper'] = bb_ma + (bb_std_dev * bb_std)
         features['bb_lower'] = bb_ma - (bb_std_dev * bb_std)
-        features['bb_position'] = (data['Close'] - features['bb_lower']) / (features['bb_upper'] - features['bb_lower'])
+        features['bb_position'] = (data['close'] - features['bb_lower']) / (features['bb_upper'] - features['bb_lower'])
         
         # MACD
-        exp1 = data['Close'].ewm(span=12).mean()
-        exp2 = data['Close'].ewm(span=26).mean()
+        exp1 = data['close'].ewm(span=12).mean()
+        exp2 = data['close'].ewm(span=26).mean()
         features['macd'] = exp1 - exp2
         features['macd_signal'] = features['macd'].ewm(span=9).mean()
         features['macd_histogram'] = features['macd'] - features['macd_signal']
         
         # Volume indicators
-        features['volume_ma'] = data['Volume'].rolling(20).mean()
-        features['volume_ratio'] = data['Volume'] / features['volume_ma']
+        features['volume_ma'] = data['volume'].rolling(20).mean()
+        features['volume_ratio'] = data['volume'] / features['volume_ma']
         
         # Lags (valores anteriores)
         for lag in range(1, 6):
-            features[f'price_lag_{lag}'] = data['Close'].shift(lag)
-            features[f'volume_lag_{lag}'] = data['Volume'].shift(lag)
+            features[f'price_lag_{lag}'] = data['close'].shift(lag)
+            features[f'volume_lag_{lag}'] = data['volume'].shift(lag)
         
         # High-Low features
-        features['high_low_pct'] = (data['High'] - data['Low']) / data['Close'] * 100
-        features['close_to_high'] = data['Close'] / data['High']
-        features['close_to_low'] = data['Close'] / data['Low']
+        features['high_low_pct'] = (data['high'] - data['low']) / data['close'] * 100
+        features['close_to_high'] = data['close'] / data['high']
+        features['close_to_low'] = data['close'] / data['low']
         
         # Momentum indicators
-        features['momentum_5'] = data['Close'] / data['Close'].shift(5)
-        features['momentum_10'] = data['Close'] / data['Close'].shift(10)
+        features['momentum_5'] = data['close'] / data['close'].shift(5)
+        features['momentum_10'] = data['close'] / data['close'].shift(10)
         
         return features.fillna(method='ffill').fillna(0)
     

@@ -14,8 +14,8 @@ import warnings
 # Importar módulos avançados
 try:
     from ml_models_advanced import AdvancedMLModels, train_advanced_models
-    from advanced_indicators import AdvancedIndicators, calculate_all_advanced_indicators
-    from intelligent_confidence import IntelligentConfidence, calculate_intelligent_confidence
+    from advanced_indicators import AdvancedIndicators
+    from intelligent_confidence import IntelligentConfidence
     ADVANCED_MODULES_AVAILABLE = True
 except ImportError as e:
     logging.warning(f"Módulos avançados não encontrados: {e}")
@@ -252,10 +252,9 @@ class EnhancedFinancialAnalyzer:
                 'trend': [price_data.iloc[-1] * (1 + 0.02 * i) for i in range(1, 6)]
             }
             
-            confidence_data = calculate_intelligent_confidence(
+            confidence_data = IntelligentConfidence().calculate_comprehensive_confidence(
                 predictions=predictions_dict,
                 indicators=advanced_indicators,
-                price_data=price_data,
                 data=data
             )
             
@@ -282,7 +281,7 @@ class EnhancedFinancialAnalyzer:
             advanced_indicators = {}
             if ADVANCED_MODULES_AVAILABLE:
                 try:
-                    advanced_indicators = calculate_all_advanced_indicators(data)
+                    advanced_indicators = AdvancedIndicators().calculate_all_indicators(data_with_indicators)
                 except Exception as e:
                     logging.warning(f"Erro nos indicadores avançados: {e}")
             
@@ -308,7 +307,7 @@ class EnhancedFinancialAnalyzer:
                 data_with_indicators, analysis, confidence_data
             )
             
-            logging.info(f"Análise avançada concluída para {ticker}")\n            
+            logging.info(f"Análise avançada concluída para {ticker}")            
             return {
                 'ticker': ticker,
                 'timestamp': datetime.now().isoformat(),
