@@ -248,14 +248,11 @@ def get_crypto_info(coin_id: str):
 
 @app.post("/chart-data")
 def get_chart_data(request: dict):
-    """Gera análise financeira completa e robusta com IA avançada, ML ensemble e indicadores técnicos."""
+    """Gera análise financeira ULTRA-INTELIGENTE v3.0 com IA avançada, LSTM, Prophet e ensemble de ML."""
     try:
-        # Usar sistema enhanced unificado
-        analyzer = EnhancedFinancialAnalyzer()
-        
         # Extrair parâmetros com fallbacks mais robustos
         raw_ticker = request.get('ticker', request.get('symbol', '')).upper().strip()
-        days_forecast = request.get('days_forecast', 30)
+        days_forecast = request.get('days_forecast', 3)
         
         if not raw_ticker:
             raise HTTPException(status_code=400, detail="Ticker/Symbol não pode estar vazio")
@@ -270,10 +267,13 @@ def get_chart_data(request: dict):
                 logger.info(f"Auto-corrigido ticker brasileiro: {raw_ticker} -> {ticker}")
         
         # Validar days_forecast
-        days_forecast = max(1, min(60, int(days_forecast)))  # Entre 1 e 60 dias
+        days_forecast = max(1, min(10, int(days_forecast)))  # Entre 1 e 10 dias para IA avançada
         
-        logger.info(f"Iniciando análise completa para: {ticker}")
-        result = analyzer.generate_enhanced_chart_data(ticker, days_forecast)
+        logger.info(f"🤖 Iniciando análise INTELIGENTE v3.0 para: {ticker}")
+        
+        # USAR ANÁLISE INTELIGENTE v3.0 com todas as melhorias
+        from logic_enhanced import generate_intelligent_analysis
+        result = generate_intelligent_analysis(ticker, days_forecast)
         
         # Verificar se houve erro na obtenção de dados
         if result.get('error') or len(result.get('historical_data', [])) == 0:
@@ -287,26 +287,44 @@ def get_chart_data(request: dict):
                 fallback_tickers.extend([f"{ticker}.SA", f"{ticker}.SAO"])  # Adicionar sufixos
             
             for fallback_ticker in fallback_tickers:
-                logger.info(f"Tentando fallback: {fallback_ticker}")
-                result = analyzer.generate_enhanced_chart_data(fallback_ticker, days_forecast)
+                logger.info(f"Tentando fallback inteligente: {fallback_ticker}")
+                result = generate_intelligent_analysis(fallback_ticker, days_forecast)
                 if not result.get('error') and len(result.get('historical_data', [])) > 0:
                     ticker = fallback_ticker
                     break
         
-        logger.info(f"Análise robusta concluída para {ticker}")
+        logger.info(f"🎯 Análise INTELIGENTE v3.0 concluída para {ticker}")
         
-        # Adicionar metadados da API
-        result['api_version'] = '2.0'
+        # Adicionar metadados da API v3.0
+        result['api_version'] = '3.0_intelligent'
         result['processed_ticker'] = ticker  # Mostrar ticker final usado
         result['original_ticker'] = raw_ticker  # Ticker original da requisição
-        result['features'] = [
-            'Machine Learning Ensemble',
-            'Advanced Technical Indicators',
-            'Intelligent Confidence System', 
-            'Dynamic Risk Management',
-            'Multi-Model Predictions',
+        result['ai_features'] = [
+            'LSTM Neural Networks',
+            'Prophet Time Series Forecasting',
+            'XGBoost + Random Forest + GBM Ensemble',
+            'Auto-Hyperparameter Tuning',
+            'Market Regime Detection',
+            'Smart Confidence System',
+            'Fundamental Analysis Integration',
+            'Dynamic Support/Resistance ML',
+            'Price Pattern Recognition',
+            'Intelligent Trading Signals',
+            'Multi-timeframe Analysis',
+            'Feature Importance Tracking',
+            'Model Performance Monitoring',
             'Auto Brazilian Ticker Correction'
         ]
+        
+        # Adicionar estatísticas de IA
+        if 'market_intelligence' in result:
+            result['ai_stats'] = {
+                'models_count': len(result.get('feature_importance', {})),
+                'confidence_level': result.get('confidence_analysis', {}).get('confidence_level', 'MÉDIA'),
+                'market_regime': result.get('market_intelligence', {}).get('market_regime', {}).get('regime', 'UNKNOWN'),
+                'intelligence_version': result.get('intelligence_version', 'v3.0'),
+                'analysis_timestamp': datetime.now().isoformat()
+            }
         
         return result
     except ValueError as e:

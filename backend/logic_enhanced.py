@@ -16,6 +16,8 @@ try:
     from ml_models_advanced import AdvancedMLModels, train_advanced_models
     from advanced_indicators import AdvancedIndicators
     from intelligent_confidence import IntelligentConfidence
+    from enhanced_intelligence import EnhancedIntelligence, enhance_analysis_data
+    from ml_models_ultimate import AdvancedMLModels as UltimateMLModels
     ADVANCED_MODULES_AVAILABLE = True
 except ImportError as e:
     logging.warning(f"Módulos avançados não encontrados: {e}")
@@ -560,5 +562,98 @@ def generate_chart_data(ticker: str, days_forecast: int = 30) -> Dict:
         logging.error(f"Erro na análise de {ticker}: {e}")
         # Retorno robusto em caso de erro
         return EnhancedFinancialAnalyzer()._create_empty_response(ticker)
+
+def generate_intelligent_analysis(ticker: str, days_forecast: int = 3) -> Dict:
+    """
+    Análise inteligente com IA avançada v3.0
+    
+    Esta função integra todos os sistemas de inteligência:
+    - Machine Learning Ultimate com LSTM + Prophet + Ensemble
+    - Detecção automática de regime de mercado
+    - Sistema de confiança multi-fatorial inteligente
+    - Análise fundamentalista integrada
+    - Reconhecimento de padrões avançado
+    - Sinais de trading contextuais
+    
+    Args:
+        ticker (str): Símbolo da ação
+        days_forecast (int): Dias de previsão
+        
+    Returns:
+        Dict: Análise ultra-inteligente com dados enriquecidos
+    """
+    try:
+        # Análise base
+        base_analysis = generate_enhanced_analysis(ticker, days_forecast)
+        
+        # Aplicar inteligência avançada
+        if ADVANCED_MODULES_AVAILABLE:
+            # Sistema de ML Ultimate
+            ultimate_ml = UltimateMLModels()
+            
+            # Obter dados para análise avançada
+            stock = yf.Ticker(ticker)
+            hist_data = stock.history(period='1y')  # Mais dados para IA
+            
+            if not hist_data.empty:
+                # Treinar modelos avançados
+                ml_predictions = ultimate_ml.train_ensemble_models(hist_data, [1, 3, 5, 10])
+                
+                # Aplicar inteligência contextual
+                intelligent_analysis = enhance_analysis_data(ticker, base_analysis)
+                
+                # Integrar predições ML Ultimate
+                if ml_predictions:
+                    for day, pred_data in ml_predictions.items():
+                        # Encontrar predição correspondente na base
+                        day_num = int(day.split('_')[1])
+                        for i, pred in enumerate(intelligent_analysis.get('prediction_data', [])):
+                            if pred.get('day') == day_num:
+                                # Enriquecer com dados do ML Ultimate
+                                pred['ml_ultimate'] = {
+                                    'predicted_price': pred_data['predicted_price'],
+                                    'confidence': pred_data['confidence'],
+                                    'models_used': pred_data['models_used'],
+                                    'ensemble_weights': pred_data['ensemble_weights']
+                                }
+                                
+                                # Usar predição mais confiável
+                                if pred_data['confidence'] > pred.get('confidence', 0):
+                                    pred['predicted_price'] = pred_data['predicted_price']
+                                    pred['confidence'] = pred_data['confidence']
+                                    pred['ml_version'] = 'ultimate_v3.0'
+                
+                # Feature importance
+                feature_importance = {}
+                for day in [1, 3, 5]:
+                    importance = ultimate_ml.get_feature_importance(f'day_{day}')
+                    if importance:
+                        feature_importance[f'day_{day}'] = importance
+                
+                intelligent_analysis['feature_importance'] = feature_importance
+                
+                # Salvar modelos para cache
+                ultimate_ml.save_models(ticker.split('.')[0])
+                
+                # Metadados de versão
+                intelligent_analysis['ai_version'] = 'ultimate_v3.0'
+                intelligent_analysis['features'].extend([
+                    'LSTM Neural Networks',
+                    'Prophet Time Series',
+                    'Auto-Hyperparameter Tuning',
+                    'Feature Importance Analysis',
+                    'Model Performance Tracking'
+                ])
+                
+                logger.info(f"Análise inteligente v3.0 aplicada para {ticker}")
+                return intelligent_analysis
+        
+        # Fallback para análise base se módulos avançados não estiverem disponíveis
+        logger.warning("Módulos avançados não disponíveis, usando análise base")
+        return base_analysis
+        
+    except Exception as e:
+        logger.error(f"Erro na análise inteligente para {ticker}: {e}")
+        return generate_enhanced_analysis(ticker, days_forecast)
     analyzer = EnhancedFinancialAnalyzer()
     return analyzer.generate_enhanced_chart_data(ticker, days_forecast)
