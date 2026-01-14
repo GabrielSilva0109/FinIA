@@ -195,24 +195,39 @@ class FinancialAnalyzer:
     def _ml_analysis(self, data: pd.DataFrame, ticker: str) -> Dict[str, Any]:
         """Análise com machine learning."""
         try:
-            # Treinar modelos se necessário
-            self.ml_models.prepare_features(data)
+            # Preparar features simples
+            if len(data) < 60:
+                return {"error": "Dados insuficientes para ML"}
             
-            if len(data) >= 60:  # Mínimo para treinar
+            # Features básicas para ML
+            features = pd.DataFrame({
+                'returns': data['Close'].pct_change(),
+                'volume': data['Volume'],
+                'high_low_pct': (data['High'] - data['Low']) / data['Close'],
+                'close_open_pct': (data['Close'] - data['Open']) / data['Open']
+            }).dropna()
+            
+            if len(features) < 30:
+                return {"error": "Features insuficientes para ML"}
+            
+            # Treinar modelo simples se possível
+            try:
+                self.ml_models.prepare_features(features)
                 self.ml_models.train_models()
                 predictions = self.ml_models.predict()
                 
                 return {
                     "price_prediction": {
-                        "next_day": float(predictions['next_day_prediction']),
-                        "next_week": float(predictions['next_week_prediction']),
-                        "confidence": float(predictions['confidence'])
+                        "next_day": float(predictions.get('next_day_prediction', data['Close'].iloc[-1])),
+                        "next_week": float(predictions.get('next_week_prediction', data['Close'].iloc[-1])),
+                        "confidence": float(predictions.get('confidence', 0.5))
                     },
-                    "trend_prediction": predictions['trend_direction'],
-                    "risk_score": float(predictions['risk_score'])
+                    "trend_prediction": predictions.get('trend_direction', 'neutral'),
+                    "risk_score": float(predictions.get('risk_score', 0.5))
                 }
-            else:
-                return {"error": "Dados insuficientes para ML"}
+            except Exception as ml_error:
+                logger.warning(f"Erro no ML para {ticker}: {ml_error}")
+                return {"error": f"ML training failed: {str(ml_error)}"}
                 
         except Exception as e:
             logger.error(f"Erro na análise ML para {ticker}: {e}")

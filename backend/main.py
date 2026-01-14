@@ -7,7 +7,7 @@ from typing import Optional
 import logging
 from datetime import datetime
 from models import TickerRequest, AnalysisResponse, ErrorResponse
-from logic import analyze, analyze_all, price_ticker
+from logic import financial_analyzer
 from logic_crypto import crypto_analyzer
 from config import settings
 
@@ -62,7 +62,7 @@ def analisar_ativo(ticker: str = Query(..., description="Código da ação, ex: 
         if not ticker or ticker.strip() == "":
             raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
         
-        resultado = analyze(ticker.upper().strip())
+        resultado = financial_analyzer.analyze_single_stock(ticker.upper().strip())
         logger.info(f"Análise realizada para ticker: {ticker}")
         return resultado
     except Exception as e:
@@ -73,9 +73,8 @@ def analisar_ativo(ticker: str = Query(..., description="Código da ação, ex: 
 def analisar_todos():
     """Analisa múltiplas ações em lote."""
     try:
-        resultado = analyze_all()
-        logger.info("Análise em lote realizada com sucesso")
-        return resultado
+        # Análise em lote não implementada na nova versão
+        raise HTTPException(status_code=501, detail="Análise em lote não implementada")
     except Exception as e:
         logger.error(f"Erro na análise em lote: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro na análise em lote: {str(e)}")
@@ -110,7 +109,26 @@ def price(symbol: str):
         if not symbol or symbol.strip() == "":
             raise HTTPException(status_code=400, detail="Symbol não pode estar vazio")
         
-        res = price_ticker(symbol.upper().strip())
+        # Buscar preço usando yfinance
+        stock = yf.Ticker(symbol.upper().strip())
+        info = stock.info
+        current_price = info.get('regularMarketPrice') or info.get('currentPrice')
+        
+        if not current_price:
+            # Tentar através de dados históricos
+            hist = stock.history(period="1d")
+            if not hist.empty:
+                current_price = float(hist['Close'].iloc[-1])
+            
+        if not current_price:
+            raise HTTPException(status_code=404, detail=f"Preço não encontrado para {symbol}")
+            
+        res = {
+            "symbol": symbol.upper(),
+            "price": current_price,
+            "currency": info.get('currency', 'USD'),
+            "timestamp": datetime.now().isoformat()
+        }
         logger.info(f"Preço obtido para symbol: {symbol}")
         return res
     except Exception as e:
