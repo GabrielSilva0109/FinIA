@@ -7,8 +7,7 @@ from typing import Optional
 import logging
 from datetime import datetime
 from models import TickerRequest, AnalysisResponse, ErrorResponse
-from logic import analyzer
-from logic_enhanced import EnhancedFinancialAnalyzer, generate_chart_data as enhanced_generate_chart_data
+from logic_enhanced import EnhancedFinancialAnalyzer
 from logic_crypto import crypto_analyzer
 from config import settings
 
@@ -58,13 +57,16 @@ def health_check():
 
 @app.get("/analise/acao")
 def analisar_ativo(ticker: str = Query(..., description="Código da ação, ex: AAPL ou PETR4.SA")):
-    """Analisa uma ação específica retornando indicadores técnicos e previsões."""
+    """Analisa uma ação específica usando sistema enhanced."""
     try:
         if not ticker or ticker.strip() == "":
             raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
         
-        resultado = analyzer.analyze_single_stock(ticker.upper().strip())
-        logger.info(f"Análise realizada para ticker: {ticker}")
+        # Usar sistema enhanced unificado
+        analyzer = EnhancedFinancialAnalyzer()
+        resultado = analyzer.generate_enhanced_chart_data(ticker.upper().strip(), 15)
+        
+        logger.info(f"Análise enhanced realizada para ticker: {ticker}")
         return resultado
     except Exception as e:
         logger.error(f"Erro ao analisar ticker {ticker}: {str(e)}")
@@ -139,22 +141,34 @@ def price(symbol: str):
 # Endpoint para documentação das funcionalidades
 @app.get("/features")
 def get_features():
-    """Lista todas as funcionalidades disponíveis da API."""
+    """Lista todas as funcionalidades disponíveis da API enhanced."""
     return {
         "endpoints": {
-            "/analise/acao": "Análise completa de uma ação individual",
-            "/analise/acoes": "Análise em lote de múltiplas ações",
-            "/analise/crypto": "Análise completa de criptomoedas",
-            "/crypto/symbols": "Lista símbolos disponíveis",
+            "/analise/acao": "Análise enhanced de ação individual",
+            "/analise/acoes": "Análise em lote (não implementado)",
+            "/analise/crypto": "Análise completa de criptomoedas", 
+            "/chart-data": "Análise completa e robusta com IA avançada",
+            "/generate-chart": "Geração de gráficos com ML",
+            "/crypto/symbols": "Lista símbolos de crypto disponíveis",
             "/preco/{symbol}": "Preço atual de um símbolo",
             "/api/yahoo/{symbol}": "Proxy para dados do Yahoo Finance"
         },
+        "advanced_features": [
+            "Machine Learning Ensemble (XGBoost + Random Forest + Gradient Boosting)",
+            "Advanced Technical Indicators (Ichimoku, Stochastic, ADX, ATR)",
+            "Intelligent Confidence System (Multi-factor)", 
+            "Dynamic Risk Management (Stop-loss/Take-profit adaptativos)",
+            "Auto Brazilian Ticker Correction (.SA)",
+            "Real-time Predictions (30 days forecast)"
+        ],
         "indicators": [
             "RSI", "MACD", "Médias Móveis", "Bandas de Bollinger", 
-            "Oscilador Estocástico", "ATR", "VWAP", "ADX", "CCI", "Williams %R"
+            "Williams %R", "CCI", "Oscilador Estocástico", "ATR", "VWAP", "ADX", 
+            "Ichimoku Cloud", "Fibonacci Retracements", "Volume Analysis"
         ],
-        "ml_models": ["XGBoost", "Random Forest", "Gradient Boosting"],
-        "data_sources": ["Yahoo Finance", "Binance", "CoinGecko", "Análise de Sentimento"]
+        "ml_models": ["XGBoost", "Random Forest", "Gradient Boosting", "Linear Regression"],
+        "data_sources": ["Yahoo Finance", "Binance", "CoinGecko"],
+        "api_version": "2.0 Enhanced"
     }
 
 # === ENDPOINTS DE CRIPTOMOEDAS ===
@@ -234,58 +248,96 @@ def get_crypto_info(coin_id: str):
 
 @app.post("/chart-data")
 def get_chart_data(request: dict):
-    """Gera dados estruturados para gráficos no frontend (sem imagem)."""
+    """Gera análise financeira completa e robusta com IA avançada, ML ensemble e indicadores técnicos."""
     try:
-        from logic import generate_chart_data
+        # Usar sistema enhanced unificado
+        analyzer = EnhancedFinancialAnalyzer()
         
-        ticker = request.get('ticker', '').upper().strip()
-        days_forecast = request.get('days_forecast', 15)
-        
-        if not ticker:
-            raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
-        
-        logger.info(f"Gerando dados de gráfico para: {ticker}")
-        result = generate_chart_data(ticker, days_forecast)
-        logger.info(f"Dados gerados para {ticker}")
-        return result
-    except Exception as e:
-        logger.error(f"Erro ao gerar dados de gráfico: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar dados: {str(e)}")
-
-@app.post("/chart-data-enhanced")
-def get_enhanced_chart_data(request: dict):
-    """Gera dados estruturados avançados com IA melhorada."""
-    try:
-        ticker = request.get('ticker', '').upper().strip()
+        # Extrair parâmetros com fallbacks mais robustos
+        raw_ticker = request.get('ticker', request.get('symbol', '')).upper().strip()
         days_forecast = request.get('days_forecast', 30)
         
-        if not ticker:
-            raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
+        if not raw_ticker:
+            raise HTTPException(status_code=400, detail="Ticker/Symbol não pode estar vazio")
         
-        logger.info(f"Gerando análise avançada para: {ticker}")
-        result = enhanced_generate_chart_data(ticker, days_forecast)
-        logger.info(f"Análise avançada concluída para {ticker}")
+        # LÓGICA INTELIGENTE: Auto-corrigir tickers brasileiros
+        ticker = raw_ticker
+        if raw_ticker and not '.' in raw_ticker:
+            # Se é um ticker brasileiro sem sufixo, adicionar .SA
+            brazilian_patterns = ['3', '4', '11']  # Terminações típicas de ações brasileiras
+            if any(raw_ticker.endswith(pattern) for pattern in brazilian_patterns):
+                ticker = f"{raw_ticker}.SA"
+                logger.info(f"Auto-corrigido ticker brasileiro: {raw_ticker} -> {ticker}")
+        
+        # Validar days_forecast
+        days_forecast = max(1, min(60, int(days_forecast)))  # Entre 1 e 60 dias
+        
+        logger.info(f"Iniciando análise completa para: {ticker}")
+        result = analyzer.generate_enhanced_chart_data(ticker, days_forecast)
+        
+        # Verificar se houve erro na obtenção de dados
+        if result.get('error') or len(result.get('historical_data', [])) == 0:
+            logger.warning(f"Dados não encontrados para {ticker}, tentando fallback...")
+            
+            # Tentar diferentes formatos
+            fallback_tickers = []
+            if ticker.endswith('.SA'):
+                fallback_tickers.append(ticker.replace('.SA', ''))  # Remover .SA
+            elif not '.' in ticker:
+                fallback_tickers.extend([f"{ticker}.SA", f"{ticker}.SAO"])  # Adicionar sufixos
+            
+            for fallback_ticker in fallback_tickers:
+                logger.info(f"Tentando fallback: {fallback_ticker}")
+                result = analyzer.generate_enhanced_chart_data(fallback_ticker, days_forecast)
+                if not result.get('error') and len(result.get('historical_data', [])) > 0:
+                    ticker = fallback_ticker
+                    break
+        
+        logger.info(f"Análise robusta concluída para {ticker}")
+        
+        # Adicionar metadados da API
+        result['api_version'] = '2.0'
+        result['processed_ticker'] = ticker  # Mostrar ticker final usado
+        result['original_ticker'] = raw_ticker  # Ticker original da requisição
+        result['features'] = [
+            'Machine Learning Ensemble',
+            'Advanced Technical Indicators',
+            'Intelligent Confidence System', 
+            'Dynamic Risk Management',
+            'Multi-Model Predictions',
+            'Auto Brazilian Ticker Correction'
+        ]
+        
         return result
+    except ValueError as e:
+        logger.error(f"Erro de validação para {raw_ticker}: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Parâmetro inválido: {str(e)}")
     except Exception as e:
-        logger.error(f"Erro na análise avançada: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Erro na análise avançada: {str(e)}")
+        logger.error(f"Erro na análise completa de {raw_ticker}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro na análise: {str(e)}")
+
+# Endpoint chart-data-enhanced removido - funcionalidade unificada em /chart-data
 
 @app.post("/generate-chart")
 def generate_financial_chart(request: dict):
-    """Gera gráfico financeiro com previsões ML (com imagem)."""
+    """Gera gráfico financeiro com previsões ML usando sistema enhanced."""
     try:
-        from logic import generate_chart
+        analyzer = EnhancedFinancialAnalyzer()
         
         ticker = request.get('ticker', '').upper().strip()
         days_forecast = request.get('days_forecast', 15)
-        chart_type = request.get('chart_type', 'candlestick')
         
         if not ticker:
             raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
         
-        logger.info(f"Gerando gráfico para: {ticker}")
-        result = generate_chart(ticker, days_forecast, chart_type)
-        logger.info(f"Gráfico gerado para {ticker}")
+        logger.info(f"Gerando análise completa para: {ticker}")
+        result = analyzer.generate_enhanced_chart_data(ticker, days_forecast)
+        
+        # Adicionar flag para indicar que é para gráfico
+        result['chart_ready'] = True
+        result['chart_type'] = request.get('chart_type', 'candlestick')
+        
+        logger.info(f"Análise para gráfico gerada para {ticker}")
         return result
     except Exception as e:
         logger.error(f"Erro ao gerar gráfico: {str(e)}")
