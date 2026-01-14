@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from models import TickerRequest, AnalysisResponse, ErrorResponse
 from logic import analyze, analyze_all, price_ticker
+from logic_crypto import crypto_analyzer
 from config import settings
 
 # Configuração de logging
@@ -124,13 +125,90 @@ def get_features():
         "endpoints": {
             "/analise/acao": "Análise completa de uma ação individual",
             "/analise/acoes": "Análise em lote de múltiplas ações",
+            "/analise/crypto": "Análise completa de criptomoedas",
+            "/crypto/symbols": "Lista símbolos disponíveis",
             "/preco/{symbol}": "Preço atual de um símbolo",
             "/api/yahoo/{symbol}": "Proxy para dados do Yahoo Finance"
         },
         "indicators": [
             "RSI", "MACD", "Médias Móveis", "Bandas de Bollinger", 
-            "Oscilador Estocástico", "ATR", "VWAP"
+            "Oscilador Estocástico", "ATR", "VWAP", "ADX", "CCI", "Williams %R"
         ],
         "ml_models": ["XGBoost", "Random Forest", "Gradient Boosting"],
-        "data_sources": ["Yahoo Finance", "Análise de Sentimento"]
+        "data_sources": ["Yahoo Finance", "Binance", "CoinGecko", "Análise de Sentimento"]
     }
+
+# === ENDPOINTS DE CRIPTOMOEDAS ===
+
+@app.get("/crypto/symbols")
+def get_crypto_symbols():
+    """Lista símbolos de criptomoedas disponíveis."""
+    try:
+        symbols = crypto_analyzer.get_available_symbols()
+        # Filtrar apenas os principais pares USDT
+        usdt_pairs = [s for s in symbols if s.endswith('/USDT')][:50]  # Top 50
+        
+        return {
+            "symbols": usdt_pairs,
+            "total_available": len(symbols),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Erro ao obter símbolos de cripto: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao obter símbolos: {str(e)}")
+
+@app.get("/analise/crypto")
+def analisar_crypto(
+    symbol: str = Query("BTC/USDT", description="Par de trading, ex: BTC/USDT"),
+    timeframe: str = Query("1d", description="Timeframe: 1m, 5m, 1h, 1d")
+):
+    """Análise completa de criptomoedas."""
+    try:
+        if not symbol or symbol.strip() == "":
+            raise HTTPException(status_code=400, detail="Symbol não pode estar vazio")
+        
+        # Validar timeframe
+        valid_timeframes = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
+        if timeframe not in valid_timeframes:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Timeframe inválido. Use: {', '.join(valid_timeframes)}"
+            )
+        
+        resultado = crypto_analyzer.analyze_crypto(symbol.upper().strip(), timeframe)
+        
+        if 'error' in resultado:
+            raise HTTPException(status_code=404, detail=resultado['error'])
+        
+        logger.info(f"Análise de cripto realizada para: {symbol}")
+        return resultado
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro na análise de cripto {symbol}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+@app.get("/crypto/info/{coin_id}")
+def get_crypto_info(coin_id: str):
+    """Obtém informações detalhadas de uma criptomoeda do CoinGecko."""
+    try:
+        if not coin_id or coin_id.strip() == "":
+            raise HTTPException(status_code=400, detail="Coin ID não pode estar vazio")
+        
+        info = crypto_analyzer.fetch_coingecko_info(coin_id.lower().strip())
+        
+        if not info:
+            raise HTTPException(status_code=404, detail=f"Informações não encontradas para {coin_id}")
+        
+        return {
+            "coin_id": coin_id,
+            "info": info,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao obter info de {coin_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
