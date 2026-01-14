@@ -8,6 +8,7 @@ import logging
 from datetime import datetime
 from models import TickerRequest, AnalysisResponse, ErrorResponse
 from logic import analyzer
+from logic_enhanced import EnhancedFinancialAnalyzer, generate_chart_data as enhanced_generate_chart_data
 from logic_crypto import crypto_analyzer
 from config import settings
 
@@ -250,6 +251,24 @@ def get_chart_data(request: dict):
     except Exception as e:
         logger.error(f"Erro ao gerar dados de gráfico: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao gerar dados: {str(e)}")
+
+@app.post("/chart-data-enhanced")
+def get_enhanced_chart_data(request: dict):
+    """Gera dados estruturados avançados com IA melhorada."""
+    try:
+        ticker = request.get('ticker', '').upper().strip()
+        days_forecast = request.get('days_forecast', 30)
+        
+        if not ticker:
+            raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
+        
+        logger.info(f"Gerando análise avançada para: {ticker}")
+        result = enhanced_generate_chart_data(ticker, days_forecast)
+        logger.info(f"Análise avançada concluída para {ticker}")
+        return result
+    except Exception as e:
+        logger.error(f"Erro na análise avançada: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro na análise avançada: {str(e)}")
 
 @app.post("/generate-chart")
 def generate_financial_chart(request: dict):
