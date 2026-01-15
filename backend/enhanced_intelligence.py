@@ -449,6 +449,152 @@ class EnhancedIntelligence:
                 'total_signals': 0
             }
 
+    def generate_analysis_summary(self, analysis_data: Dict) -> str:
+        """Gera um resumo explicativo da análise da IA"""
+        try:
+            # Extrair dados principais
+            analysis = analysis_data.get('analysis', {})
+            indicators = analysis_data.get('indicators', {})
+            market_intel = analysis_data.get('market_intelligence', {})
+            confidence_analysis = analysis_data.get('confidence_analysis', {})
+            
+            recommendation = analysis.get('recommendation', 'MANTER')
+            confidence = analysis.get('confidence', 50)
+            trend = analysis.get('trend', 'neutro')
+            current_price = analysis.get('current_price', 0)
+            predicted_price = analysis.get('predicted_price', 0)
+            
+            # Indicadores técnicos
+            rsi = indicators.get('RSI', 50)
+            macd = indicators.get('MACD', 0)
+            bb_position = indicators.get('BB_position', 0.5)
+            williams_r = indicators.get('Williams_R', -50)
+            
+            # Dados de mercado
+            market_regime = market_intel.get('market_regime', {}).get('regime', 'SIDEWAYS')
+            fundamentals = market_intel.get('fundamentals', {})
+            support_resistance = market_intel.get('support_resistance', {})
+            
+            # Construir o resumo
+            summary_parts = []
+            
+            # Introdução com recomendação
+            if recommendation == 'COMPRAR':
+                summary_parts.append(f"A IA recomenda COMPRAR com {confidence}% de confiança.")
+            elif recommendation == 'VENDER':
+                summary_parts.append(f"A IA recomenda VENDER com {confidence}% de confiança.")
+            else:
+                summary_parts.append(f"A IA recomenda MANTER posição com {confidence}% de confiança.")
+            
+            # Análise do preço e tendência
+            price_change = ((predicted_price - current_price) / current_price * 100) if current_price > 0 else 0
+            if abs(price_change) > 2:
+                direction = "alta" if price_change > 0 else "baixa"
+                summary_parts.append(f"O modelo projeta uma {direction} de {abs(price_change):.1f}% no preço.")
+            else:
+                summary_parts.append("O modelo projeta estabilidade no preço.")
+            
+            # Análise técnica
+            technical_signals = []
+            
+            # RSI
+            if rsi > 70:
+                technical_signals.append("RSI indica sobrecompra (acima de 70)")
+            elif rsi < 30:
+                technical_signals.append("RSI indica sobrevenda (abaixo de 30)")
+            elif 45 <= rsi <= 55:
+                technical_signals.append("RSI neutro")
+            
+            # MACD
+            if macd > 0.1:
+                technical_signals.append("MACD positivo sugere momento de alta")
+            elif macd < -0.1:
+                technical_signals.append("MACD negativo sugere momento de baixa")
+            else:
+                technical_signals.append("MACD neutro")
+            
+            # Bollinger Bands
+            if bb_position > 0.8:
+                technical_signals.append("preço próximo ao topo das Bandas de Bollinger")
+            elif bb_position < 0.2:
+                technical_signals.append("preço próximo ao fundo das Bandas de Bollinger")
+            
+            if technical_signals:
+                summary_parts.append(f"Tecnicamente: {', '.join(technical_signals[:3])}.")
+            
+            # Regime de mercado
+            if market_regime == 'BULLISH':
+                summary_parts.append("O mercado está em regime de alta.")
+            elif market_regime == 'BEARISH':
+                summary_parts.append("O mercado está em regime de baixa.")
+            else:
+                summary_parts.append("O mercado está em movimento lateral.")
+            
+            # Análise de suporte e resistência
+            levels = support_resistance.get('levels', [])
+            if levels:
+                support_levels = [l for l in levels if l.get('type') == 'SUPPORT']
+                resistance_levels = [l for l in levels if l.get('type') == 'RESISTANCE']
+                
+                if support_levels and resistance_levels:
+                    nearest_support = min(support_levels, key=lambda x: x.get('distance_pct', float('inf')))
+                    nearest_resistance = min(resistance_levels, key=lambda x: x.get('distance_pct', float('inf')))
+                    summary_parts.append(f"Próximo suporte em R${nearest_support.get('level', 0):.2f} e resistência em R${nearest_resistance.get('level', 0):.2f}.")
+            
+            # Análise fundamentalista
+            pe_ratio = fundamentals.get('pe_ratio', 0)
+            roe = fundamentals.get('roe', 0)
+            dividend_yield = fundamentals.get('dividend_yield', 0)
+            
+            fundamental_notes = []
+            if pe_ratio > 0:
+                if pe_ratio < 10:
+                    fundamental_notes.append("P/L baixo (possível subvalorização)")
+                elif pe_ratio > 25:
+                    fundamental_notes.append("P/L alto (possível sobrevalorização)")
+            
+            if roe > 0.15:
+                fundamental_notes.append("ROE sólido (acima de 15%)")
+            elif roe < 0.05:
+                fundamental_notes.append("ROE baixo")
+            
+            if dividend_yield > 0.05:
+                fundamental_notes.append(f"dividend yield atrativo ({dividend_yield*100:.1f}%)")
+            
+            if fundamental_notes:
+                summary_parts.append(f"Fundamentalmente: {', '.join(fundamental_notes[:2])}.")
+            
+            # Fatores de confiança
+            conf_factors = confidence_analysis.get('confidence_factors', {})
+            main_factors = sorted(conf_factors.items(), key=lambda x: x[1], reverse=True)[:2]
+            
+            if main_factors:
+                factor_names = {
+                    'technical': 'análise técnica',
+                    'data_quality': 'qualidade dos dados',
+                    'market_regime': 'regime de mercado',
+                    'fundamentals': 'fundamentos',
+                    'volatility': 'volatilidade',
+                    'volume': 'volume',
+                    'predictions': 'previsões'
+                }
+                top_factors = [factor_names.get(f[0], f[0]) for f in main_factors]
+                summary_parts.append(f"Os principais fatores de confiança são: {' e '.join(top_factors)}.")
+            
+            # Conclusão
+            if confidence >= 80:
+                summary_parts.append("A análise apresenta alta confiabilidade.")
+            elif confidence >= 60:
+                summary_parts.append("A análise apresenta confiabilidade moderada.")
+            else:
+                summary_parts.append("A análise requer cautela devido à menor confiabilidade.")
+            
+            return " ".join(summary_parts)
+            
+        except Exception as e:
+            logger.error(f"Erro na geração do resumo da análise: {e}")
+            return "Resumo indisponível devido a erro no processamento."
+
 def enhance_analysis_data(ticker: str, base_data: Dict) -> Dict:
     """Função principal para enriquecer dados de análise"""
     try:
@@ -502,6 +648,10 @@ def enhance_analysis_data(ticker: str, base_data: Dict) -> Dict:
         enhanced_base['analysis']['confidence'] = smart_confidence['confidence_percentage']
         enhanced_base['confidence_analysis'] = smart_confidence
         
+        # Gerar resumo da análise
+        analysis_summary = intelligence.generate_analysis_summary(enhanced_base)
+        enhanced_base['analysis_summary'] = analysis_summary
+        
         # Adicionar metadados de inteligência
         enhanced_base['intelligence_version'] = 'v3.0_enhanced'
         enhanced_base['features'].extend([
@@ -510,7 +660,8 @@ def enhance_analysis_data(ticker: str, base_data: Dict) -> Dict:
             'Dynamic Support/Resistance',
             'Price Pattern Recognition',
             'Intelligent Trading Signals',
-            'Fundamental Analysis Integration'
+            'Fundamental Analysis Integration',
+            'AI Analysis Summary'
         ])
         
         logger.info(f"Análise inteligente aplicada para {ticker}")
