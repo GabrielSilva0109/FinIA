@@ -6,7 +6,7 @@ import yfinance as yf
 from typing import Optional
 import logging
 from datetime import datetime
-from models import TickerRequest, AnalysisResponse, ErrorResponse
+from models import TickerRequest, TechnicalIndicators, SentimentAnalysis
 from logic_enhanced import EnhancedFinancialAnalyzer
 from logic_crypto import crypto_analyzer
 from config import settings
@@ -47,6 +47,8 @@ def health_check():
     """Endpoint detalhado de health check."""
     return {
         "status": "healthy",
+        "service": "FinAI IA-Bot v3.0",
+        "version": "3.0_intelligent",
         "timestamp": datetime.now().isoformat(),
         "services": {
             "api": "running",
@@ -247,15 +249,19 @@ def get_crypto_info(coin_id: str):
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
 @app.post("/chart-data")
-def get_chart_data(request: dict):
+def get_chart_data(request: TickerRequest):
     """Gera análise financeira ULTRA-INTELIGENTE v3.0 com IA avançada, LSTM, Prophet e ensemble de ML."""
     try:
-        # Extrair parâmetros com fallbacks mais robustos
-        raw_ticker = request.get('ticker', request.get('symbol', '')).upper().strip()
-        days_forecast = request.get('days_forecast', 3)
+        # Extrair parâmetros do modelo validado
+        raw_ticker = request.ticker
+        days_forecast = request.predictions
         
+        # Se days_forecast foi passado pelo frontend, usar ele
+        if hasattr(request, 'days_forecast') and request.days_forecast:
+            days_forecast = request.days_forecast
+            
         if not raw_ticker:
-            raise HTTPException(status_code=400, detail="Ticker/Symbol não pode estar vazio")
+            raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
         
         # LÓGICA INTELIGENTE: Auto-corrigir tickers brasileiros
         ticker = raw_ticker
@@ -295,10 +301,23 @@ def get_chart_data(request: dict):
         
         logger.info(f"🎯 Análise INTELIGENTE v3.0 concluída para {ticker}")
         
+        # COMPATIBILIDADE COM FRONTEND: Adicionar campos esperados
+        
+        # Ajustar predictions para incluir campo confidence
+        if 'prediction_data' in result:
+            for pred in result['prediction_data']:
+                if 'confidence' not in pred:
+                    pred['confidence'] = result.get('analysis', {}).get('confidence', 80) / 100
+        
+        # Adicionar timestamp se não existir
+        if 'timestamp' not in result:
+            result['timestamp'] = datetime.now().isoformat()
+        
         # Adicionar metadados da API v3.0
         result['api_version'] = '3.0_intelligent'
         result['processed_ticker'] = ticker  # Mostrar ticker final usado
         result['original_ticker'] = raw_ticker  # Ticker original da requisição
+        result['ticker'] = ticker  # Campo esperado pelo frontend
         result['ai_features'] = [
             'LSTM Neural Networks',
             'Prophet Time Series Forecasting',
