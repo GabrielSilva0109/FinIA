@@ -31,18 +31,32 @@ class EnhancedIntelligence:
     def detect_market_regime(self, data: pd.DataFrame) -> Dict:
         """Detecta regime de mercado atual (alta, baixa, lateral)"""
         try:
+            if data.empty:
+                return {'regime': 'UNKNOWN', 'confidence': 0.5}
+            
+            # Garantir colunas padronizadas
+            data = data.rename(columns={
+                'Open': 'open', 'High': 'high', 'Low': 'low', 
+                'Close': 'close', 'Volume': 'volume'
+            })
+            
+            if 'close' not in data.columns:
+                return {'regime': 'UNKNOWN', 'confidence': 0.5}
+            
             # Calcular tendências de diferentes períodos
-            returns_5d = data['close'].pct_change(5).iloc[-1]
-            returns_20d = data['close'].pct_change(20).iloc[-1]
-            returns_60d = data['close'].pct_change(60).iloc[-1]
+            returns_5d = data['close'].pct_change(5).iloc[-1] if len(data) > 5 else 0
+            returns_20d = data['close'].pct_change(20).iloc[-1] if len(data) > 20 else 0
+            returns_60d = data['close'].pct_change(60).iloc[-1] if len(data) > 60 else 0
             
             # Volatilidade realizada
-            volatility = data['close'].pct_change().rolling(20).std().iloc[-1] * np.sqrt(252)
+            volatility = data['close'].pct_change().rolling(20).std().iloc[-1] * np.sqrt(252) if len(data) > 20 else 0
             
             # Volume médio vs atual
-            avg_volume = data['volume'].rolling(20).mean().iloc[-1]
-            current_volume = data['volume'].iloc[-1]
-            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
+            volume_ratio = 1.0
+            if 'volume' in data.columns and len(data) > 20:
+                avg_volume = data['volume'].rolling(20).mean().iloc[-1]
+                current_volume = data['volume'].iloc[-1]
+                volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
             
             # Determinar regime
             if returns_20d > 0.05 and returns_60d > 0.1 and volatility < 0.3:
@@ -125,6 +139,15 @@ class EnhancedIntelligence:
     def calculate_advanced_features(self, data: pd.DataFrame) -> pd.DataFrame:
         """Calcula features avançadas para ML"""
         try:
+            # Garantir colunas padronizadas
+            data = data.rename(columns={
+                'Open': 'open', 'High': 'high', 'Low': 'low', 
+                'Close': 'close', 'Volume': 'volume'
+            })
+            
+            if any(col not in data.columns for col in ['open', 'high', 'low', 'close', 'volume']):
+                return data  # Retorna dados originais se não tem colunas necessárias
+            
             # Features de price action
             data['price_range'] = (data['high'] - data['low']) / data['close']
             data['gap_up'] = ((data['open'] - data['close'].shift(1)) / data['close'].shift(1)).clip(lower=0)

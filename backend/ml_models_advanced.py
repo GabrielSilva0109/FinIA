@@ -52,32 +52,51 @@ class AdvancedMLModels:
     
     def create_features(self, data: pd.DataFrame, window: int = 10) -> pd.DataFrame:
         """Cria features avançadas para ML"""
-        features = pd.DataFrame()
-        
-        # Preços básicos
-        features['price'] = data['close']
-        features['volume'] = data['volume']
-        
-        # Returns
-        features['return_1d'] = data['close'].pct_change(1)
-        features['return_5d'] = data['close'].pct_change(5)
-        features['return_10d'] = data['close'].pct_change(10)
-        
-        # Médias móveis
-        for period in [5, 10, 20, 50]:
-            features[f'ma_{period}'] = data['close'].rolling(period).mean()
-            features[f'price_to_ma_{period}'] = data['close'] / features[f'ma_{period}']
-        
-        # Volatilidade
-        features['volatility_10d'] = data['close'].rolling(10).std()
-        features['volatility_20d'] = data['close'].rolling(20).std()
-        
-        # RSI
-        delta = data['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        features['rsi'] = 100 - (100 / (1 + rs))
+        try:
+            # Garantir colunas padronizadas primeiro
+            data = data.rename(columns={
+                'Open': 'open', 'High': 'high', 'Low': 'low', 
+                'Close': 'close', 'Volume': 'volume'
+            })
+            
+            # Verificar se temos colunas necessárias
+            if 'close' not in data.columns or 'volume' not in data.columns:
+                logger.error("Colunas necessárias não encontradas")
+                return pd.DataFrame()
+            
+            features = pd.DataFrame()
+            
+            # Preços básicos
+            features['price'] = data['close']
+            features['volume'] = data['volume']
+            
+            # Returns
+            features['return_1d'] = data['close'].pct_change(1)
+            features['return_5d'] = data['close'].pct_change(5)
+            features['return_10d'] = data['close'].pct_change(10)
+            
+            # Médias móveis
+            for period in [5, 10, 20, 50]:
+                features[f'ma_{period}'] = data['close'].rolling(period).mean()
+                features[f'price_to_ma_{period}'] = data['close'] / features[f'ma_{period}']
+            
+            # Volatilidade
+            features['volatility_10d'] = data['close'].rolling(10).std()
+            features['volatility_20d'] = data['close'].rolling(20).std()
+            
+            # RSI
+            delta = data['close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            features['rsi'] = 100 - (100 / (1 + rs))
+            
+            # Remover NaN e retornar
+            return features.dropna()
+            
+        except Exception as e:
+            logger.error(f"Erro na criação de features: {e}")
+            return pd.DataFrame()
         
         # Bollinger Bands
         bb_period = 20

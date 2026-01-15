@@ -70,6 +70,19 @@ class AdvancedMLModels:
         try:
             df = data.copy()
             
+            # Garantir colunas padronizadas (lowercase)
+            df = df.rename(columns={
+                'Open': 'open', 'High': 'high', 'Low': 'low', 
+                'Close': 'close', 'Volume': 'volume'
+            })
+            
+            # Verificar se temos as colunas necessárias
+            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            for col in required_cols:
+                if col not in df.columns:
+                    logger.error(f"Coluna {col} não encontrada nos dados")
+                    return pd.DataFrame()
+            
             # Features básicas
             df['returns'] = df['close'].pct_change()
             df['log_returns'] = np.log(df['close'] / df['close'].shift(1))

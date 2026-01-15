@@ -54,6 +54,13 @@ class EnhancedFinancialAnalyzer:
                 'Close': 'close', 'Volume': 'volume'
             })
             
+            # Garantir que todas as colunas necessárias existem
+            required_cols = ['open', 'high', 'low', 'close', 'volume']
+            for col in required_cols:
+                if col not in data.columns:
+                    logging.error(f"Coluna {col} não encontrada nos dados")
+                    return pd.DataFrame()
+            
             return data
             
         except Exception as e:
@@ -100,7 +107,12 @@ class EnhancedFinancialAnalyzer:
             try:
                 # Usar modelos ML avançados
                 features = self.ml_models.create_features(data)
-                X, y = self.ml_models.prepare_data(features)
+                features_clean = features.dropna()
+                
+                if features_clean.empty:
+                    return self._fallback_predictions(data, days_forecast)
+                
+                X, y = self.ml_models.prepare_data(features_clean)
                 
                 # Treinar modelos
                 results, X_test, y_test = self.ml_models.train_models(X, y)
@@ -249,45 +261,65 @@ class EnhancedFinancialAnalyzer:
     def _calculate_enhanced_confidence(self, data: pd.DataFrame, predictions: List[Dict], 
                                      advanced_indicators: Dict = None) -> Dict:
         """Calcula confiança usando sistema inteligente"""
-        if not ADVANCED_MODULES_AVAILABLE or not self.confidence_system:
-            return {'confidence_percentage': 65, 'confidence_level': 'MÉDIA-ALTA'}
-        
         try:
-            # Preparar dados para análise de confiança
-            price_data = data['close']
+            # Base confidence
+            base_confidence = 60
             
             # Verificar se temos predições válidas
-            valid_predictions = [p['predicted_price'] for p in predictions if p['predicted_price'] > 0]
+            valid_predictions = [p.get('predicted_price', 0) for p in predictions if p.get('predicted_price', 0) > 0]
             
             if not valid_predictions:
-                return {'confidence_percentage': 60, 'confidence_level': 'MÉDIA'}
+                return {'confidence_percentage': base_confidence, 'confidence_level': 'MÉDIA'}
             
-            # Extrair previsões individuais
-            predictions_dict = {
-                'ensemble': valid_predictions[:5],
-                'trend': [price_data.iloc[-1] * (1 + 0.02 * i) for i in range(1, 6)],
-                'ml_models': valid_predictions
-            }
+            # Calcular fatores de confiança
+            confidence_factors = []
             
-            confidence_data = self.confidence_system.calculate_comprehensive_confidence(
-                predictions=predictions_dict,
-                indicators=advanced_indicators or {},
-                data=data
-            )
+            # Fator 1: Qualidade dos dados
+            data_quality = min(100, len(data) / 90 * 100)  # Máximo para 90+ dias
+            confidence_factors.append(data_quality)
             
-            # Garantir valores válidos
-            confidence_pct = confidence_data.get('confidence_percentage', 65)
-            if confidence_pct < 30:
-                confidence_pct = 65  # Valor mínimo razoável
+            # Fator 2: Consistência das predições
+            pred_std = np.std(valid_predictions[:5])  # Desvio das primeiras 5 predições
+            pred_consistency = max(0, 100 - (pred_std / np.mean(valid_predictions) * 100))
+            confidence_factors.append(pred_consistency)
+            
+            # Fator 3: Indicadores técnicos
+            if not data.empty and 'rsi' in data.columns:
+                latest_rsi = data['rsi'].iloc[-1]
+                rsi_confidence = 100 - abs(50 - latest_rsi)  # Quanto mais próximo de 50, maior incerteza
+                confidence_factors.append(rsi_confidence)
+            
+            # Fator 4: Volume
+            if not data.empty and 'volume' in data.columns:
+                volume_data = data['volume'].tail(10)
+                volume_consistency = 100 - (volume_data.std() / volume_data.mean() * 50)
+                confidence_factors.append(max(0, min(100, volume_consistency)))
+            
+            # Calcular confiança final
+            final_confidence = np.mean(confidence_factors) if confidence_factors else base_confidence
+            final_confidence = max(30, min(95, final_confidence))  # Entre 30-95%
+            
+            # Determinar nível
+            if final_confidence >= 80:
+                level = 'MUITO_ALTA'
+            elif final_confidence >= 65:
+                level = 'ALTA'
+            elif final_confidence >= 50:
+                level = 'MÉDIA-ALTA'
+            elif final_confidence >= 35:
+                level = 'MÉDIA'
+            else:
+                level = 'BAIXA'
             
             return {
-                'confidence_percentage': int(confidence_pct),
-                'confidence_level': confidence_data.get('confidence_level', 'MÉDIA-ALTA')
+                'confidence_percentage': int(final_confidence),
+                'confidence_level': level,
+                'factors_used': len(confidence_factors)
             }
             
         except Exception as e:
             logging.warning(f"Erro no cálculo de confiança: {e}")
-            return {'confidence_percentage': 70, 'confidence_level': 'MÉDIA-ALTA'}
+            return {'confidence_percentage': 65, 'confidence_level': 'MÉDIA-ALTA'}
     
     def generate_enhanced_chart_data(self, ticker: str, days_forecast: int = 30) -> Dict:
         """Gera análise completa com recursos avançados"""
@@ -320,6 +352,10 @@ class EnhancedFinancialAnalyzer:
             confidence_data = self._calculate_enhanced_confidence(
                 data_with_indicators, predictions, advanced_indicators
             )
+            
+            # Verificar se houve erro na confiança e usar fallback
+            if not confidence_data or not isinstance(confidence_data, dict):
+                confidence_data = {'confidence_percentage': 65, 'confidence_level': 'MÉDIA-ALTA'}
             
             # Formatação dos dados históricos (últimos 90 pontos)
             historical_data = self._format_historical_data(data_with_indicators.tail(90))
@@ -583,8 +619,9 @@ def generate_intelligent_analysis(ticker: str, days_forecast: int = 3) -> Dict:
         Dict: Análise ultra-inteligente com dados enriquecidos
     """
     try:
-        # Análise base
-        base_analysis = generate_enhanced_analysis(ticker, days_forecast)
+        # Análise base usando o sistema enhanced existente
+        analyzer = EnhancedFinancialAnalyzer()
+        base_analysis = analyzer.generate_enhanced_chart_data(ticker, days_forecast)
         
         # Aplicar inteligência avançada
         if ADVANCED_MODULES_AVAILABLE:
@@ -654,6 +691,12 @@ def generate_intelligent_analysis(ticker: str, days_forecast: int = 3) -> Dict:
         
     except Exception as e:
         logger.error(f"Erro na análise inteligente para {ticker}: {e}")
-        return generate_enhanced_analysis(ticker, days_forecast)
+        # Fallback para análise base
+        try:
+            analyzer = EnhancedFinancialAnalyzer()
+            return analyzer.generate_enhanced_chart_data(ticker, days_forecast)
+        except Exception as fallback_error:
+            logger.error(f"Erro no fallback para {ticker}: {fallback_error}")
+            return EnhancedFinancialAnalyzer()._create_empty_response(ticker)
     analyzer = EnhancedFinancialAnalyzer()
     return analyzer.generate_enhanced_chart_data(ticker, days_forecast)
