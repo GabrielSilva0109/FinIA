@@ -383,7 +383,6 @@ class EnhancedFinancialAnalyzer:
                 'data_points': len(historical_data),
                 'model_version': 'enhanced_v2.0',
                 'api_version': '2.0',
-                'processed_ticker': ticker,
                 'original_ticker': ticker.replace('.SA', '') if '.SA' in ticker else ticker,
                 'features': [
                     'Machine Learning Ensemble',

@@ -315,7 +315,6 @@ def get_chart_data(request: TickerRequest):
         
         # Adicionar metadados da API v3.0
         result['api_version'] = '3.0_intelligent'
-        result['processed_ticker'] = ticker  # Mostrar ticker final usado
         result['original_ticker'] = raw_ticker  # Ticker original da requisição
         result['ticker'] = ticker  # Campo esperado pelo frontend
         result['ai_features'] = [
