@@ -13,7 +13,6 @@ import warnings
 
 # Importar módulos avançados
 try:
-    from ml_models_advanced import AdvancedMLModels, train_advanced_models
     from advanced_indicators import AdvancedIndicators
     from intelligent_confidence import IntelligentConfidence
     from enhanced_intelligence import EnhancedIntelligence, enhance_analysis_data
@@ -32,7 +31,7 @@ class EnhancedFinancialAnalyzer:
     
     def __init__(self):
         self.cache = {}
-        self.ml_models = AdvancedMLModels() if ADVANCED_MODULES_AVAILABLE else None
+        self.ml_models = UltimateMLModels() if ADVANCED_MODULES_AVAILABLE else None
         self.confidence_system = IntelligentConfidence() if ADVANCED_MODULES_AVAILABLE else None
         
     def get_stock_data(self, ticker: str, period: str = "6mo") -> pd.DataFrame:
@@ -105,57 +104,42 @@ class EnhancedFinancialAnalyzer:
         
         if ADVANCED_MODULES_AVAILABLE and self.ml_models:
             try:
-                # Usar modelos ML avançados
-                features = self.ml_models.create_features(data)
-                features_clean = features.dropna()
+                # Usar train_ensemble_models diretamente
+                target_days = list(range(1, days_forecast + 1))
+                ml_results = self.ml_models.train_ensemble_models(data, target_days)
                 
-                if features_clean.empty:
-                    return self._fallback_predictions(data, days_forecast)
-                
-                X, y = self.ml_models.prepare_data(features_clean)
-                
-                # Treinar modelos
-                results, X_test, y_test = self.ml_models.train_models(X, y)
-                
-                # Gerar previsões ensemble
-                last_features = features_clean.tail(1)
-                if not last_features.empty:
-                    ensemble_result = self.ml_models.create_ensemble_prediction(last_features)
-                    
-                    # Criar previsões para os próximos dias
+                if ml_results:
                     current_price = data['close'].iloc[-1]
                     base_date = data.index[-1]
                     
-                    # Base prediction do ensemble
-                    base_prediction = ensemble_result.get('ensemble_prediction', [current_price])[0]
-                    std_dev = ensemble_result.get('std_dev', current_price * 0.05)
-                    
-                    for i in range(1, days_forecast + 1):
-                        pred_date = base_date + timedelta(days=i)
-                        
-                        # Usar ensemble prediction como base com variação temporal
-                        trend_factor = 1 + (np.random.normal(0, 0.01) * i)  # Variação menor
-                        predicted_price = float(base_prediction * trend_factor)
-                        
-                        # Intervalos de confiança
-                        confidence_upper = float(predicted_price + (std_dev * 1.96))
-                        confidence_lower = float(predicted_price - (std_dev * 1.96))
-                        
-                        predictions.append({
-                            'date': pred_date.strftime('%Y-%m-%d'),
-                            'timestamp': int(pred_date.timestamp() * 1000),
-                            'predicted_price': predicted_price,
-                            'confidence_upper': confidence_upper,
-                            'confidence_lower': confidence_lower
-                        })
+                    for i, day in enumerate(target_days):
+                        day_key = f'day_{day}'
+                        if day_key in ml_results:
+                            pred_data = ml_results[day_key]
+                            
+                            future_date = base_date + pd.Timedelta(days=day)
+                            timestamp = int(future_date.timestamp() * 1000)
+                            
+                            predictions.append({
+                                'date': future_date.strftime('%Y-%m-%d'),
+                                'timestamp': timestamp,
+                                'predicted_price': float(pred_data['predicted_price']),
+                                'confidence': float(pred_data['confidence']),
+                                'upper_bound': float(pred_data['predicted_price'] * 1.1),
+                                'lower_bound': float(pred_data['predicted_price'] * 0.9),
+                                'models_used': pred_data.get('models_used', []),
+                                'day': day
+                            })
+                
+                # Se conseguiu predições, retorna. Senão usa fallback
+                if predictions:
+                    return predictions
                     
             except Exception as e:
                 logging.warning(f"Erro nos modelos avançados: {e}")
-                predictions = self._fallback_predictions(data, days_forecast)
-        else:
-            predictions = self._fallback_predictions(data, days_forecast)
         
-        return predictions
+        # Sempre usar fallback se modelos avançados falharem ou não tiverem resultados
+        return self._fallback_predictions(data, days_forecast)
     
     def _fallback_predictions(self, data: pd.DataFrame, days_forecast: int) -> List[Dict]:
         """Previsões de fallback usando métodos simples"""
