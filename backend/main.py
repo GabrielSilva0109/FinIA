@@ -272,14 +272,14 @@ def get_chart_data(request: TickerRequest):
                 ticker = f"{raw_ticker}.SA"
                 logger.info(f"Auto-corrigido ticker brasileiro: {raw_ticker} -> {ticker}")
         
-        # Validar days_forecast
-        days_forecast = max(1, min(10, int(days_forecast)))  # Entre 1 e 10 dias para IA avançada
+        # Validar days_forecast - Agora suporta até 30 dias!
+        days_forecast = max(1, min(30, int(days_forecast)))  # Entre 1 e 30 dias para IA otimizada
         
-        logger.info(f"🤖 Iniciando análise INTELIGENTE v3.0 para: {ticker}")
+        logger.info(f"🚀 Iniciando análise ULTRA-RÁPIDA v3.0 para: {ticker}")
         
-        # USAR ANÁLISE INTELIGENTE v3.0 com todas as melhorias
-        from logic_enhanced import generate_intelligent_analysis
-        result = generate_intelligent_analysis(ticker, days_forecast)
+        # USAR ANALYZER DIRETO OTIMIZADO (evitar duplicação de dados)
+        analyzer = EnhancedFinancialAnalyzer()
+        result = analyzer.generate_enhanced_chart_data(ticker, days_forecast)
         
         # Verificar se houve erro na obtenção de dados
         if result.get('error') or len(result.get('historical_data', [])) == 0:
@@ -361,7 +361,7 @@ def generate_financial_chart(request: dict):
         analyzer = EnhancedFinancialAnalyzer()
         
         ticker = request.get('ticker', '').upper().strip()
-        days_forecast = request.get('days_forecast', 15)
+        days_forecast = request.get('days_forecast', 30)  # Padrão 30 dias
         
         if not ticker:
             raise HTTPException(status_code=400, detail="Ticker não pode estar vazio")
