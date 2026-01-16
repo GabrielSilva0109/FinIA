@@ -3,7 +3,13 @@ Redis Cache Manager - Sistema de cache distribuído para FinAI
 Substitui cache em memória por Redis para persistência e performance
 """
 
-import redis
+try:
+    import redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+    redis = None
+
 import json
 import pickle
 import time
@@ -28,6 +34,11 @@ class RedisCache:
     
     def _initialize_redis(self):
         """Inicializa conexão Redis com tratamento de erro"""
+        if not REDIS_AVAILABLE:
+            logger.info("📦 Redis não disponível - usando cache local otimizado")
+            self.is_redis_available = False
+            return
+            
         try:
             self.redis_client = redis.from_url(
                 settings.REDIS_URL,
@@ -43,7 +54,7 @@ class RedisCache:
             logger.info("✅ Redis conectado com sucesso!")
             
         except Exception as e:
-            logger.warning(f"⚠️ Redis não disponível, usando cache local: {e}")
+            logger.info(f"💾 Redis não disponível, usando cache local otimizado: {e}")
             self.is_redis_available = False
     
     def _serialize_value(self, value: Any) -> bytes:

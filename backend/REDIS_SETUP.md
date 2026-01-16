@@ -11,6 +11,7 @@
 ## 📦 **Como Instalar Redis no Windows**
 
 ### **Opção 1: Docker (Recomendado)**
+
 ```bash
 # Instalar Docker Desktop primeiro: https://www.docker.com/products/docker-desktop/
 
@@ -22,6 +23,7 @@ docker ps
 ```
 
 ### **Opção 2: WSL2 (Windows Subsystem for Linux)**
+
 ```bash
 # Instalar WSL2 primeiro
 wsl --install
@@ -33,6 +35,7 @@ redis-server --daemonize yes
 ```
 
 ### **Opção 3: Redis para Windows (Não oficial)**
+
 ```bash
 # Baixar de: https://github.com/microsoftarchive/redis/releases
 # Extrair e executar: redis-server.exe
@@ -43,12 +46,14 @@ redis-server --daemonize yes
 ## 🔧 **Status Atual do Sistema**
 
 ### ✅ **Funcionando Agora:**
+
 - 💾 **Cache Local Inteligente**: Mesmo algoritmo, armazenamento em memória
 - ⚡ **Performance Excelente**: ~3 segundos primeira vez, ~0.5s com cache
 - 🔄 **Fallback Automático**: Muda para Redis quando disponível
 - 📊 **Monitoramento**: Endpoints `/health` e `/cache/stats` funcionais
 
 ### 🚀 **Com Redis (Quando Instalado):**
+
 - 🔥 **Cache Persistente**: Sobrevive a reinicializações
 - ⚡ **Performance Superior**: ~0.2s com cache Redis
 - 📈 **Escalabilidade**: Múltiplas instâncias compartilham cache
@@ -59,6 +64,7 @@ redis-server --daemonize yes
 ## 📊 **Teste de Performance Sem Redis**
 
 Execute para ver o sistema funcionando:
+
 ```bash
 python test_redis_local.py
 ```

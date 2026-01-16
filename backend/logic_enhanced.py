@@ -72,7 +72,9 @@ class EnhancedFinancialAnalyzer:
         cached_data = self.cache.get(cache_key)
         if cached_data is not None:
             logging.info(f"🚀 Redis HIT: Dados em cache para {ticker}")
-            return cached_data
+            # Garantir que os dados retornados do cache são um DataFrame válido
+            if isinstance(cached_data, pd.DataFrame) and not cached_data.empty:
+                return self._normalize_dataframe(cached_data)
         
         try:
             logging.info(f"🔍 Buscando dados para {ticker} com período {period}")
@@ -83,28 +85,38 @@ class EnhancedFinancialAnalyzer:
                 logging.warning(f"⚠️ Nenhum dado encontrado para {ticker}")
                 return pd.DataFrame()
             
+            # Normalizar dados antes de cachear
+            normalized_data = self._normalize_dataframe(data)
+            
             # Armazenar no Redis cache
-            self.cache.set(cache_key, data, ttl=self.cache_ttl)
-            logging.info(f"✅ Dados obtidos e cacheados no Redis para {ticker}: {len(data)} períodos")
+            self.cache.set(cache_key, normalized_data, ttl=self.cache_ttl)
+            logging.info(f"✅ Dados obtidos e cacheados no Redis para {ticker}: {len(normalized_data)} períodos")
                 
-            # Garantir colunas padronizadas
-            data = data.rename(columns={
-                'Open': 'open', 'High': 'high', 'Low': 'low', 
-                'Close': 'close', 'Volume': 'volume'
-            })
-            
-            # Garantir que todas as colunas necessárias existem
-            required_cols = ['open', 'high', 'low', 'close', 'volume']
-            for col in required_cols:
-                if col not in data.columns:
-                    logging.error(f"Coluna {col} não encontrada nos dados")
-                    return pd.DataFrame()
-            
-            return data
+            return normalized_data
             
         except Exception as e:
             logging.error(f"Erro ao obter dados para {ticker}: {e}")
             return pd.DataFrame()
+    
+    def _normalize_dataframe(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Normaliza DataFrame para garantir colunas padronizadas"""
+        if data.empty:
+            return data
+            
+        # Garantir colunas padronizadas
+        data = data.rename(columns={
+            'Open': 'open', 'High': 'high', 'Low': 'low', 
+            'Close': 'close', 'Volume': 'volume'
+        })
+        
+        # Garantir que todas as colunas necessárias existem
+        required_cols = ['open', 'high', 'low', 'close', 'volume']
+        for col in required_cols:
+            if col not in data.columns:
+                logging.error(f"Coluna {col} não encontrada nos dados")
+                return pd.DataFrame()
+        
+        return data
     
     def _calculate_basic_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
         """Calcula indicadores técnicos básicos"""
@@ -687,7 +699,7 @@ class EnhancedFinancialAnalyzer:
                     'Real-time Performance'
                 ],
                 'performance': {
-                    'cache_hit': analysis_cache_key in self.cache,
+                    'cache_hit': cached_analysis is not None,
                     'optimization_level': 'ultra_fast'
                 }
             }
