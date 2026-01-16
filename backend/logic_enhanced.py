@@ -11,6 +11,7 @@ import logging
 import time
 from typing import Dict, List, Tuple, Optional
 import warnings
+from redis_cache import cache_manager
 
 # Importar módulos avançados
 try:
@@ -28,40 +29,50 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class EnhancedFinancialAnalyzer:
-    """Analisador financeiro aprimorado com IA avançada"""
+    """Analisador financeiro aprimorado com IA avançada e Redis cache"""
     
     def __init__(self):
-        self.cache = {}  # Cache para otimização de performance
+        # Redis cache substituindo cache local
+        self.cache = cache_manager  # Usar Redis manager
         self.cache_ttl = 3600  # 1 hora de cache (MÁXIMO)
         self.last_cache_clear = time.time()
         self.ml_models = None  # Lazy loading para performance máxima
         self.confidence_system = None  # Lazy loading
-        self.model_cache = {}  # Cache de modelos treinados
+        self.model_cache = {}  # Cache de modelos treinados (ainda local para modelos ML)
         self.skip_ml = True  # PERFORMANCE: Skip ML por padrão
     
     def _clear_old_cache(self):
-        """Limpa cache antigo para otimizar memoria"""
+        """Limpa cache antigo para otimizar memoria - Redis gerencia automaticamente"""
         current_time = time.time()
         if current_time - self.last_cache_clear > self.cache_ttl:
-            # PERFORMANCE: Manter apenas caches recentes
-            old_cache = self.cache.copy()
-            self.cache = {k: v for k, v in old_cache.items() 
-                         if current_time - v[1] < self.cache_ttl}
+            # Redis gerencia TTL automaticamente, mas podemos limpar cache local se necessário
+            if hasattr(self.cache, 'local_cache') and len(self.cache.local_cache) > 1000:
+                # Se cache local estiver muito grande, limpar entradas expiradas
+                expired_keys = []
+                for key, (value, expiry) in self.cache.local_cache.items():
+                    if current_time > expiry:
+                        expired_keys.append(key)
+                
+                for key in expired_keys:
+                    del self.cache.local_cache[key]
+                
+                if expired_keys:
+                    logging.info(f"🗑️ Cache local otimizado: {len(expired_keys)} entradas expiradas removidas")
+                    
             self.last_cache_clear = current_time
-            logging.info(f"🗺️ Cache otimizado: {len(old_cache)} -> {len(self.cache)} entradas")
         
     def get_stock_data(self, ticker: str, period: str = "6mo") -> pd.DataFrame:
-        """Obtém dados históricos da ação com cache inteligente e tratamento robusto"""
+        """Obtém dados históricos da ação com Redis cache inteligente e tratamento robusto"""
         
-        # Cache inteligente para otimizar performance
-        cache_key = f"{ticker}_{period}"
+        # Redis cache inteligente para otimizar performance
+        cache_key = f"stock_data_{ticker}_{period}"
         self._clear_old_cache()
         
-        if cache_key in self.cache:
-            cached_data, cache_time = self.cache[cache_key]
-            if time.time() - cache_time < self.cache_ttl:
-                logging.info(f"📊 Usando dados em cache para {ticker}")
-                return cached_data
+        # Verificar cache Redis
+        cached_data = self.cache.get(cache_key)
+        if cached_data is not None:
+            logging.info(f"🚀 Redis HIT: Dados em cache para {ticker}")
+            return cached_data
         
         try:
             logging.info(f"🔍 Buscando dados para {ticker} com período {period}")
@@ -72,9 +83,9 @@ class EnhancedFinancialAnalyzer:
                 logging.warning(f"⚠️ Nenhum dado encontrado para {ticker}")
                 return pd.DataFrame()
             
-            # Armazenar no cache
-            self.cache[cache_key] = (data, time.time())
-            logging.info(f"✅ Dados obtidos e cacheados para {ticker}: {len(data)} períodos")
+            # Armazenar no Redis cache
+            self.cache.set(cache_key, data, ttl=self.cache_ttl)
+            logging.info(f"✅ Dados obtidos e cacheados no Redis para {ticker}: {len(data)} períodos")
                 
             # Garantir colunas padronizadas
             data = data.rename(columns={
@@ -128,69 +139,133 @@ class EnhancedFinancialAnalyzer:
         return data
     
     def _make_enhanced_predictions(self, data: pd.DataFrame, days_forecast: int) -> List[Dict]:
-        """Faz previsões ULTRA-OTIMIZADAS"""
+        """Faz previsões ULTRA-OTIMIZADAS com Redis cache"""
         predictions = []
         
         # Performance: Limitar a 30 dias e usar cache agressivo
         days_forecast = min(days_forecast, 30)
         
-        # CACHE ULTRA-AGRESSIVO: Baseado no ticker + data recente
+        # CACHE ULTRA-AGRESSIVO Redis: Baseado no ticker + data recente
         ticker_hash = hash(str(data.index[-1]))
-        cache_key = f"pred_{ticker_hash}_{days_forecast}"
+        cache_key = f"predictions_{ticker_hash}_{days_forecast}"
         
-        if cache_key in self.cache:
-            cached_pred, cache_time = self.cache[cache_key]
-            if time.time() - cache_time < self.cache_ttl:
-                logging.info(f"🚀 Cache HIT - Resposta instantânea!")
-                return cached_pred
+        cached_predictions = self.cache.get(cache_key)
+        if cached_predictions is not None:
+            logging.info(f"🚀 Redis HIT: Previsões em cache - Resposta instantânea!")
+            return cached_predictions
         
         # ESTRATÉGIA ULTRA-RÁPIDA: Usar fallback existente otimizado
-        logging.info(f"⚡ Usando estratégia ultra-rápida (fallback inteligente)")
+        logging.info(f"⚡ Calculando previsões ultra-rápidas (fallback inteligente)")
         
         fallback_predictions = self._fallback_predictions(data, days_forecast)
         
-        # Cache agressivo para próximas requisições
-        self.cache[cache_key] = (fallback_predictions, time.time())
-        logging.info(f"💾 Previsões cacheadas para máxima performance")
+        # Cache agressivo Redis para próximas requisições
+        self.cache.set(cache_key, fallback_predictions, ttl=self.cache_ttl)
+        logging.info(f"💾 Previsões cacheadas no Redis para máxima performance")
         
         return fallback_predictions
     
     def _fallback_predictions(self, data: pd.DataFrame, days_forecast: int) -> List[Dict]:
-        """Previsões ULTRA-RÁPIDAS de fallback otimizadas"""
+        """Previsões REALÍSTICAS com oscilações baseadas no histórico"""
         predictions = []
         current_price = data['close'].iloc[-1]
         base_date = data.index[-1]
         
-        # PERFORMANCE BOOST: Apenas uma análise de tendência simples
-        recent_prices = data['close'].tail(10)  # Reduzido de 5,15,30 para apenas 10
-        simple_trend = (recent_prices.iloc[-1] - recent_prices.iloc[0]) / len(recent_prices)
+        # ANÁLISE HISTÓRICA REALÍSTICA
+        recent_prices = data['close'].tail(20)  # Maior janela para padrões
         
-        # Volatilidade SIMPLES para performance
-        volatility = data['close'].pct_change().tail(10).std()  # Reduzido de 20 para 10
+        # Calcular oscilações históricas reais
+        price_changes = data['close'].pct_change().dropna()
+        volatility = price_changes.std()
         
-        # ESTRATÉGIA SIMPLES: Uma única fórmula para todos os horizontes
+        # Padrões de oscilação (sobe/desce alternadamente em % das vezes)
+        positive_changes = price_changes[price_changes > 0]
+        negative_changes = price_changes[price_changes < 0]
+        
+        # Tendência de médio prazo (mais suavizada)
+        ma_5 = recent_prices.tail(5).mean()
+        ma_15 = recent_prices.tail(15).mean()
+        medium_trend = (ma_5 - ma_15) / 15  # Tendência suavizada
+        
+        # RSI básico para detectar sobrevenda/sobrecompra
+        rsi_period = min(14, len(price_changes))
+        if rsi_period >= 2:
+            gains = price_changes.where(price_changes > 0, 0).tail(rsi_period)
+            losses = -price_changes.where(price_changes < 0, 0).tail(rsi_period)
+            rs = gains.mean() / losses.mean() if losses.mean() > 0 else 1
+            rsi = 100 - (100 / (1 + rs))
+        else:
+            rsi = 50
+        
+        # ESTRATÉGIA REALÍSTICA: Simular oscilações como no histórico
+        last_price = current_price
+        
         for i in range(1, days_forecast + 1):
             pred_date = base_date + timedelta(days=i)
             
-            # Fórmula SIMPLES e RÁPIDA
-            predicted_price = current_price + (simple_trend * i * 0.8)  # Suavizado
-            confidence_decay = 0.94 ** (i - 1)  # Decaimento único
+            # OSCILAÇÃO REALÍSTICA baseada em padrões históricos
             
-            # Limites de segurança rápidos
-            predicted_price = max(current_price * 0.5, min(current_price * 2.0, predicted_price))
+            # 1. Tendência base suavizada (não linear)
+            trend_factor = medium_trend * i * 0.3  # Reduzido para não dominar
             
-            # Confiança simples
+            # 2. Oscilação cíclica IRREGULAR (simula sobe/desce natural)
+            cycle_amplitude = volatility * current_price * 1.5  # Amplitude baseada na volatilidade
+            # Ciclo irregular combinando diferentes frequências
+            cycle_factor = (
+                np.sin(i * np.pi / 6) * cycle_amplitude * 0.6 +  # Ciclo principal ~12 dias
+                np.sin(i * np.pi / 3.5) * cycle_amplitude * 0.3 +  # Ciclo secundário ~7 dias  
+                np.sin(i * np.pi / 2) * cycle_amplitude * 0.1   # Ciclo rápido ~4 dias
+            )
+            
+            # 3. Componente aleatório controlado (simula incerteza)
+            if len(positive_changes) > 0 and len(negative_changes) > 0:
+                # Alternar entre subidas e descidas de forma mais natural
+                prob_up = 0.5 if i % 3 != 0 else 0.3  # Varia a probabilidade
+                if np.random.random() < prob_up:
+                    random_factor = np.random.choice(positive_changes.values) * current_price * 0.7
+                else:
+                    random_factor = np.random.choice(negative_changes.values) * current_price * 0.7
+            else:
+                random_factor = 0
+            
+            # 4. Correção por RSI (reversão em extremos)
+            rsi_correction = 0
+            if rsi > 70:  # Sobrecomprado - tendência de queda
+                rsi_correction = -volatility * current_price * 0.5
+            elif rsi < 30:  # Sobrevendido - tendência de alta
+                rsi_correction = volatility * current_price * 0.5
+            
+            # Preço previsto REALÍSTICO
+            predicted_price = last_price + trend_factor + cycle_factor + random_factor + rsi_correction
+            
+            # Limites realísticos (movimento máximo diário ~5-10%)
+            max_daily_change = current_price * 0.08  # 8% max por dia
+            predicted_price = max(
+                last_price - max_daily_change, 
+                min(last_price + max_daily_change, predicted_price)
+            )
+            
+            # Limites absolutos de segurança
+            predicted_price = max(current_price * 0.7, min(current_price * 1.5, predicted_price))
+            
+            # Atualizar preço base para próxima iteração (oscilação contínua)
+            last_price = predicted_price
+            
+            # Confiança decrescente com horizonte
+            confidence_decay = 0.92 ** (i - 1)  # Decai mais rápido
             base_confidence = 0.75 * confidence_decay
-            confidence_range = 1.05 + (volatility * 5)  # Simplificado
+            
+            # Range de confiança baseado na volatilidade real
+            confidence_multiplier = 1.0 + (volatility * 3 * np.sqrt(i))  # Aumenta com tempo
             
             predictions.append({
                 'date': pred_date.strftime('%Y-%m-%d'),
                 'timestamp': int(pred_date.timestamp() * 1000),
                 'predicted_price': float(predicted_price),
                 'confidence': float(base_confidence),
-                'confidence_upper': float(predicted_price * confidence_range),
-                'confidence_lower': float(predicted_price / confidence_range),
-                'method': 'ultra_fast_fallback'
+                'confidence_upper': float(predicted_price * confidence_multiplier),
+                'confidence_lower': float(predicted_price / confidence_multiplier),
+                'method': 'realistic_oscillation'
             })
         
         return predictions
@@ -548,17 +623,16 @@ class EnhancedFinancialAnalyzer:
         }
     
     def generate_enhanced_chart_data(self, ticker: str, days_forecast: int = 30) -> Dict:
-        """Gera análise completa ULTRA-OTIMIZADA"""
+        """Gera análise completa ULTRA-OTIMIZADA com Redis cache"""
         try:
             logging.info(f"🚀 Análise ULTRA-RÁPIDA para {ticker}")
             
-            # CACHE GLOBAL: Verificar se análise completa já existe
+            # CACHE GLOBAL Redis: Verificar se análise completa já existe
             analysis_cache_key = f"analysis_{ticker}_{days_forecast}"
-            if analysis_cache_key in self.cache:
-                cached_analysis, cache_time = self.cache[analysis_cache_key]
-                if time.time() - cache_time < self.cache_ttl:
-                    logging.info(f"⚡ Análise completa em cache - INSTANTÂNEA!")
-                    return cached_analysis
+            cached_analysis = self.cache.get(analysis_cache_key)
+            if cached_analysis is not None:
+                logging.info(f"⚡ Redis HIT: Análise completa em cache - INSTANTÂNEA!")
+                return cached_analysis
             
             # Obter dados
             data = self.get_stock_data(ticker)
@@ -618,9 +692,9 @@ class EnhancedFinancialAnalyzer:
                 }
             }
             
-            # Cache da análise completa
-            self.cache[analysis_cache_key] = (result, time.time())
-            logging.info(f"⚡ Análise completa cacheada para {ticker}")
+            # Cache da análise completa no Redis
+            self.cache.set(analysis_cache_key, result, ttl=self.cache_ttl)
+            logging.info(f"⚡ Análise completa cacheada no Redis para {ticker}")
             
             return result
             

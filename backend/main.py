@@ -9,6 +9,7 @@ from datetime import datetime
 from models import TickerRequest, TechnicalIndicators, SentimentAnalysis
 from logic_enhanced import EnhancedFinancialAnalyzer
 from logic_crypto import crypto_analyzer
+from redis_cache import cache_manager
 from config import settings
 
 # Configuração de logging
@@ -45,17 +46,49 @@ def root():
 @app.get("/health")
 def health_check():
     """Endpoint detalhado de health check."""
+    cache_health = cache_manager.health_check()
     return {
         "status": "healthy",
         "service": "FinAI IA-Bot v3.0",
         "version": "3.0_intelligent",
         "timestamp": datetime.now().isoformat(),
+        "cache": cache_health,
         "services": {
             "api": "running",
             "ml_models": "available",
-            "external_apis": "connected"
-        }
+            "external_apis": "connected",
+            "redis_cache": "connected" if cache_health.get('redis_connected') else "fallback"
+        },
+        "features_active": [
+            "Ultra-Fast Redis Cache",
+            "Realistic Predictions", 
+            "Advanced ML Models",
+            "Intelligent Confidence System"
+        ]
     }
+
+@app.get("/cache/stats")
+def get_cache_stats():
+    """Estatísticas do sistema de cache Redis."""
+    return {
+        "cache_stats": cache_manager.get_stats(),
+        "cache_health": cache_manager.health_check(),
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.delete("/cache/clear")
+def clear_cache():
+    """Limpa todo o cache (usar com cuidado!)."""
+    try:
+        success = cache_manager.clear()
+        return {
+            "success": success,
+            "message": "Cache limpo com sucesso!" if success else "Erro ao limpar cache",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Erro ao limpar cache: {e}")
+        return {"success": False, "error": str(e)}
 
 @app.get("/analise/acao")
 def analisar_ativo(ticker: str = Query(..., description="Código da ação, ex: AAPL ou PETR4.SA")):

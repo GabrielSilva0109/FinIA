@@ -36,5 +36,11 @@ class Settings:
     
     # Performance
     MAX_CONCURRENT_REQUESTS: int = 10
+    
+    # Redis Cache
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_ENABLED: bool = True
+    CACHE_TTL: int = 3600  # 1 hora em segundos
+    REDIS_TIMEOUT: int = 5  # timeout para conexões Redis
 
 settings = Settings()
