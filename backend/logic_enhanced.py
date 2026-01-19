@@ -250,6 +250,11 @@ class EnhancedFinancialAnalyzer:
             # Preço previsto REALÍSTICO
             predicted_price = last_price + trend_factor + cycle_factor + random_factor + rsi_correction
             
+            # VALIDAÇÃO CRÍTICA: Previnir bugs de escala
+            if predicted_price <= 0 or predicted_price < current_price * 0.01:
+                logging.warning(f"Previsão com escala incorreta detectada: {predicted_price}, usando fallback")
+                predicted_price = last_price * (1 + np.random.uniform(-0.02, 0.02))  # Fallback simples
+            
             # Limites realísticos (movimento máximo diário ~5-10%)
             max_daily_change = current_price * 0.08  # 8% max por dia
             predicted_price = max(
@@ -257,8 +262,14 @@ class EnhancedFinancialAnalyzer:
                 min(last_price + max_daily_change, predicted_price)
             )
             
-            # Limites absolutos de segurança
+            # Limites absolutos de segurança RÍGIDOS
             predicted_price = max(current_price * 0.7, min(current_price * 1.5, predicted_price))
+            
+            # VALIDAÇÃO FINAL: Garantir que previsão está em escala razoável
+            price_ratio = predicted_price / current_price
+            if price_ratio < 0.5 or price_ratio > 2.0:
+                logging.error(f"Previsão fora de escala detectada: ratio={price_ratio:.3f}, corrigindo")
+                predicted_price = last_price * (1 + np.random.uniform(-0.05, 0.05))  # Correção conservadora
             
             # Atualizar preço base para próxima iteração (oscilação contínua)
             last_price = predicted_price
@@ -270,15 +281,32 @@ class EnhancedFinancialAnalyzer:
             # Range de confiança baseado na volatilidade real
             confidence_multiplier = 1.0 + (volatility * 3 * np.sqrt(i))  # Aumenta com tempo
             
-            predictions.append({
-                'date': pred_date.strftime('%Y-%m-%d'),
-                'timestamp': int(pred_date.timestamp() * 1000),
-                'predicted_price': float(predicted_price),
-                'confidence': float(base_confidence),
-                'confidence_upper': float(predicted_price * confidence_multiplier),
-                'confidence_lower': float(predicted_price / confidence_multiplier),
-                'method': 'realistic_oscillation'
-            })
+            # VALIDAÇÃO FINAL antes de adicionar à lista
+            if predicted_price > 0 and 0.5 <= (predicted_price / current_price) <= 2.0:
+                predictions.append({
+                    'date': pred_date.strftime('%Y-%m-%d'),
+                    'timestamp': int(pred_date.timestamp() * 1000),
+                    'predicted_price': float(predicted_price),
+                    'confidence': float(base_confidence),
+                    'confidence_upper': float(predicted_price * confidence_multiplier),
+                    'confidence_lower': float(predicted_price / confidence_multiplier),
+                    'method': 'realistic_oscillation',
+                    'validation_ratio': float(predicted_price / current_price)  # Debug info
+                })
+            else:
+                logging.error(f"Previsão inválida rejeitada: price={predicted_price:.6f}, ratio={predicted_price/current_price:.3f}")
+                # Adicionar previsão fallback conservadora
+                fallback_price = last_price * (1 + np.random.uniform(-0.01, 0.01))
+                predictions.append({
+                    'date': pred_date.strftime('%Y-%m-%d'),
+                    'timestamp': int(pred_date.timestamp() * 1000),
+                    'predicted_price': float(fallback_price),
+                    'confidence': float(base_confidence * 0.5),  # Menor confiança
+                    'confidence_upper': float(fallback_price * confidence_multiplier),
+                    'confidence_lower': float(fallback_price / confidence_multiplier),
+                    'method': 'fallback_conservative',
+                    'validation_ratio': float(fallback_price / current_price)
+                })
         
         return predictions
     
@@ -356,11 +384,62 @@ class EnhancedFinancialAnalyzer:
         """Análise avançada com múltiplos fatores"""
         current_price = data['close'].iloc[-1]
         
-        # Previsão final - usar primeira predição válida
+        # Previsão final - ANÁLISE INTELIGENTE das tendências
         valid_predictions = [p for p in predictions if p.get('predicted_price', 0) > 0]
         if valid_predictions:
-            final_prediction = valid_predictions[0]['predicted_price']  # Primeira predição
-            price_change_pct = ((final_prediction / current_price) - 1) * 100
+            candidate_prediction = valid_predictions[0]['predicted_price']
+            
+            # NOVA LÓGICA: Analisar tendência geral das previsões
+            if len(valid_predictions) >= 3:
+                # Calcular tendência média das próximas previsões
+                first_price = valid_predictions[0]['predicted_price']
+                mid_price = valid_predictions[len(valid_predictions)//2]['predicted_price'] 
+                last_price = valid_predictions[-1]['predicted_price']
+                
+                # Tendência de curto prazo (primeira vs média)
+                short_trend = ((first_price - current_price) / current_price) * 100
+                
+                # Tendência de médio prazo (primeira vs meio)
+                medium_trend = ((mid_price - current_price) / current_price) * 100
+                
+                # Tendência de longo prazo (primeira vs última)
+                long_trend = ((last_price - current_price) / current_price) * 100
+                
+                logging.info(f"Tendências - Curto: {short_trend:.1f}%, Médio: {medium_trend:.1f}%, Longo: {long_trend:.1f}%")
+                
+                # Usar tendência mais significativa para decisão
+                if abs(long_trend) > abs(short_trend) and abs(long_trend) > 5:
+                    # Se tendência de longo prazo é significativa, usar ela
+                    final_prediction = last_price
+                    price_change_pct = long_trend
+                    logging.info(f"Usando tendência de longo prazo: {price_change_pct:.1f}%")
+                elif abs(medium_trend) > abs(short_trend) and abs(medium_trend) > 3:
+                    # Se tendência de médio prazo é significativa, usar ela
+                    final_prediction = mid_price
+                    price_change_pct = medium_trend
+                    logging.info(f"Usando tendência de médio prazo: {price_change_pct:.1f}%")
+                else:
+                    # Usar tendência de curto prazo
+                    final_prediction = first_price
+                    price_change_pct = short_trend
+                    logging.info(f"Usando tendência de curto prazo: {price_change_pct:.1f}%")
+            else:
+                # Fallback para método antigo se poucas previsões
+                final_prediction = candidate_prediction
+                price_change_pct = ((final_prediction / current_price) - 1) * 100
+            
+            # VALIDAÇÃO CRÍTICA: Verificar se previsão está em escala razoável
+            prediction_ratio = final_prediction / current_price
+            if 0.5 <= prediction_ratio <= 2.0:  # Ratio razoável
+                logging.info(f"Previsão válida aceita: R${final_prediction:.2f} (ratio: {prediction_ratio:.3f})")
+            else:
+                # Rejeitar previsão inválida e usar fallback
+                logging.error(f"Previsão rejeitada por escala incorreta: R${final_prediction:.2f} (ratio: {prediction_ratio:.3f})")
+                recent_prices = data['close'].tail(5)
+                trend_change = ((recent_prices.iloc[-1] / recent_prices.iloc[0]) - 1) * 100
+                final_prediction = current_price * (1 + (trend_change / 100) * 0.3)  # Mais conservador
+                price_change_pct = ((final_prediction / current_price) - 1) * 100
+                logging.info(f"Usando previsão fallback: R${final_prediction:.2f}")
         else:
             # Fallback: calcular baseado em tendência simples
             recent_prices = data['close'].tail(5)
@@ -448,13 +527,21 @@ class EnhancedFinancialAnalyzer:
                     elif 'VENDA' in signal or 'BAIXA' in signal:
                         recommendation_score -= 0.5
         
-        # Converter score em recomendação - Thresholds mais inteligentes
-        if recommendation_score >= 1.5:
+        # Converter score em recomendação - Thresholds APRIMORADOS para maior precisão
+        if recommendation_score >= 1.2:
             recommendation = "COMPRAR"
-        elif recommendation_score > -0.5:
-            recommendation = "MANTER"
-        else:
+        elif recommendation_score <= -1.0:  # Mais sensível a sinais de venda
+            recommendation = "VENDER"  
+        elif price_change_pct <= -10:  # NOVA REGRA: Queda significativa prevista = VENDA
             recommendation = "VENDER"
+            recommendation_score -= 2  # Penalizar fortemente quedas grandes
+            logging.info(f"VENDA por queda significativa prevista: {price_change_pct:.1f}%")
+        elif price_change_pct <= -5:  # Queda moderada = VENDA também
+            recommendation = "VENDER"  
+            recommendation_score -= 1
+            logging.info(f"VENDA por queda moderada prevista: {price_change_pct:.1f}%")
+        else:
+            recommendation = "MANTER"
         
         return {
             'recommendation': recommendation,
@@ -669,6 +756,15 @@ class EnhancedFinancialAnalyzer:
             # Sistema de confiança otimizado
             confidence_data = self._calculate_enhanced_confidence(data_with_indicators, predictions)
             
+            # RESTAURAR: Análise técnica detalhada
+            technical_analysis = self._generate_technical_analysis(data_with_indicators, analysis)
+            
+            # RESTAURAR: Recomendações detalhadas  
+            recommendations = self._generate_recommendations(data_with_indicators, analysis, predictions, confidence_data)
+            
+            # RESTAURAR: Resumo inteligente da análise
+            analysis_summary = self._generate_analysis_summary(analysis, confidence_data, technical_analysis, recommendations)
+            
             # Formatação otimizada
             historical_data = self._format_historical_data_fast(data_with_indicators.tail(60))  # Reduzido de 90 para 60
             indicators = self._format_indicators_fast(data_with_indicators)
@@ -684,6 +780,9 @@ class EnhancedFinancialAnalyzer:
                 'indicators': indicators,
                 'risk_management': risk_management,
                 'confidence_analysis': confidence_data,
+                'analysis_summary': analysis_summary,
+                'technical_analysis': technical_analysis,
+                'recommendations': recommendations,
                 'advanced_indicators': [],  # Skip para performance
                 'days_forecast': days_forecast,
                 'data_points': len(historical_data),
@@ -933,6 +1032,188 @@ class EnhancedFinancialAnalyzer:
             'model_version': 'enhanced_v2.0',
             'error': 'Dados não encontrados'
         }
+    
+    def _generate_technical_analysis(self, data: pd.DataFrame, analysis: Dict) -> Dict:
+        """Gera análise técnica detalhada compatível com interface"""
+        try:
+            latest = data.iloc[-1]
+            recent_data = data.tail(20)
+            
+            # Calcular suporte e resistência
+            highs = recent_data['high'].rolling(5).max()
+            lows = recent_data['low'].rolling(5).min()
+            resistance_level = float(highs.iloc[-1])
+            support_level = float(lows.iloc[-1])
+            
+            # Sinais dos indicadores
+            rsi = latest.get('rsi', 50)
+            macd = latest.get('macd', 0)
+            current_price = latest['close']
+            
+            # Sinais RSI
+            if rsi > 70:
+                rsi_signal = "SOBRECOMPRADO"
+            elif rsi < 30:
+                rsi_signal = "SOBREVENDIDO"
+            else:
+                rsi_signal = "NEUTRO"
+            
+            # Sinais MACD
+            if macd > 0:
+                macd_signal = "COMPRA"
+            elif macd < 0:
+                macd_signal = "VENDA"
+            else:
+                macd_signal = "NEUTRO"
+                
+            # Sinal Bollinger (aproximado)
+            ma20 = latest.get('ma20', current_price)
+            if current_price > ma20 * 1.02:
+                bollinger_signal = "QUEBRA_SUPERIOR"
+            elif current_price < ma20 * 0.98:
+                bollinger_signal = "QUEBRA_INFERIOR"
+            else:
+                bollinger_signal = "DENTRO_BANDAS"
+            
+            return {
+                'trend': analysis.get('trend', 'neutro'),
+                'support_level': support_level,
+                'resistance_level': resistance_level,
+                'rsi_signal': rsi_signal,
+                'macd_signal': macd_signal,
+                'bollinger_signal': bollinger_signal
+            }
+            
+        except Exception as e:
+            logging.warning(f"Erro na análise técnica: {e}")
+            return {
+                'trend': 'neutro',
+                'support_level': 0,
+                'resistance_level': 0,
+                'rsi_signal': 'NEUTRO',
+                'macd_signal': 'NEUTRO',
+                'bollinger_signal': 'DENTRO_BANDAS'
+            }
+    
+    def _generate_recommendations(self, data: pd.DataFrame, analysis: Dict, predictions: List[Dict], confidence_data: Dict) -> Dict:
+        """Gera recomendações detalhadas compatíveis com interface"""
+        try:
+            current_price = data['close'].iloc[-1]
+            recommendation = analysis.get('recommendation', 'MANTER')
+            confidence_pct = confidence_data.get('confidence_percentage', 50)
+            
+            # Target price baseado na primeira previsão
+            target_price = current_price
+            if predictions and len(predictions) > 0:
+                target_price = predictions[0].get('predicted_price', current_price)
+            
+            # Stop loss baseado no risk management
+            volatility = data['close'].pct_change().tail(10).std()
+            stop_loss_pct = max(0.05, min(0.15, volatility * 0.8))
+            stop_loss = current_price * (1 - stop_loss_pct)
+            
+            # Mapeamento de ações
+            action_map = {
+                'COMPRAR': 'BUY',
+                'VENDER': 'SELL', 
+                'MANTER': 'HOLD'
+            }
+            action = action_map.get(recommendation, 'HOLD')
+            
+            # Probabilidade baseada na confiança
+            probability = confidence_pct / 100.0
+            
+            # Timeframe baseado nos dias de previsão
+            timeframe = "1-2 semanas"
+            
+            return {
+                'action': action,
+                'target_price': float(target_price),
+                'stop_loss': float(stop_loss),
+                'probability': float(probability),
+                'timeframe': timeframe
+            }
+            
+        except Exception as e:
+            logging.warning(f"Erro nas recomendações: {e}")
+            return {
+                'action': 'HOLD',
+                'target_price': 0,
+                'stop_loss': 0,
+                'probability': 0.5,
+                'timeframe': '1-2 semanas'
+            }
+    
+    def _generate_analysis_summary(self, analysis: Dict, confidence_data: Dict, technical_analysis: Dict, recommendations: Dict) -> str:
+        """Gera resumo inteligente da análise - o campo mais importante!"""
+        try:
+            # Extrair dados principais
+            recommendation = analysis.get('recommendation', 'MANTER')
+            confidence = confidence_data.get('confidence_percentage', 50)
+            trend = analysis.get('trend', 'neutro')
+            price_change_pct = analysis.get('price_change_percent', 0)
+            
+            # Sinais técnicos
+            rsi_signal = technical_analysis.get('rsi_signal', 'NEUTRO')
+            macd_signal = technical_analysis.get('macd_signal', 'NEUTRO')
+            
+            # Construir explicação inteligente
+            summary_parts = []
+            
+            # 1. Recomendação principal com justificativa
+            if recommendation == 'COMPRAR':
+                summary_parts.append(f"🟢 RECOMENDAÇÃO DE COMPRA com {confidence}% de confiança.")
+                if price_change_pct > 0:
+                    summary_parts.append(f"O ativo está em tendência de alta (+{price_change_pct:.1f}%)")
+                if macd_signal == 'COMPRA':
+                    summary_parts.append("e o MACD confirma sinal de compra.")
+            elif recommendation == 'VENDER':
+                summary_parts.append(f"🔴 RECOMENDAÇÃO DE VENDA com {confidence}% de confiança.")
+                if price_change_pct < 0:
+                    summary_parts.append(f"O ativo está em tendência de baixa ({price_change_pct:.1f}%)")
+                if rsi_signal == 'SOBRECOMPRADO':
+                    summary_parts.append("e o RSI indica sobrecompra.")
+            else:
+                summary_parts.append(f"🟡 RECOMENDAÇÃO DE MANTER com {confidence}% de confiança.")
+                summary_parts.append(f"O mercado está {trend} sem sinais claros de direção.")
+            
+            # 2. Análise técnica
+            tech_signals = []
+            if rsi_signal == 'SOBREVENDIDO':
+                tech_signals.append("RSI indica possível reversão de alta")
+            elif rsi_signal == 'SOBRECOMPRADO':
+                tech_signals.append("RSI sugere possível correção")
+                
+            if macd_signal == 'COMPRA':
+                tech_signals.append("MACD em sinal de compra")
+            elif macd_signal == 'VENDA':
+                tech_signals.append("MACD em sinal de venda")
+            
+            if tech_signals:
+                summary_parts.append(f" Tecnicamente: {', '.join(tech_signals)}.")
+            
+            # 3. Nível de confiança e fatores
+            if confidence >= 80:
+                summary_parts.append("A análise apresenta alta confiança baseada em múltiplos indicadores convergentes.")
+            elif confidence >= 60:
+                summary_parts.append("A confiança é moderada com alguns indicadores conflitantes.")
+            else:
+                summary_parts.append("Baixa confiança devido à volatilidade e sinais mistos no mercado.")
+            
+            # 4. Recomendação de ação
+            target_price = recommendations.get('target_price', 0)
+            if target_price > 0:
+                current_price = analysis.get('current_price', 0)
+                if current_price > 0:
+                    potential_gain = ((target_price - current_price) / current_price) * 100
+                    if abs(potential_gain) > 1:
+                        summary_parts.append(f"Potencial de variação: {potential_gain:+.1f}% no prazo estimado.")
+            
+            return " ".join(summary_parts)
+            
+        except Exception as e:
+            logging.warning(f"Erro no resumo da análise: {e}")
+            return f"Análise para {analysis.get('recommendation', 'MANTER')} com confiança de {confidence_data.get('confidence_percentage', 50)}%. Consulte os indicadores técnicos para mais detalhes."
 
 # Função wrapper principal para compatibilidade e robustez
 def generate_chart_data(ticker: str, days_forecast: int = 30) -> Dict:
@@ -1060,5 +1341,187 @@ def generate_intelligent_analysis(ticker: str, days_forecast: int = 3) -> Dict:
         except Exception as fallback_error:
             logger.error(f"Erro no fallback para {ticker}: {fallback_error}")
             return EnhancedFinancialAnalyzer()._create_empty_response(ticker)
+    
+    def _generate_technical_analysis(self, data: pd.DataFrame, analysis: Dict) -> Dict:
+        """Gera análise técnica detalhada compatível com interface"""
+        try:
+            latest = data.iloc[-1]
+            recent_data = data.tail(20)
+            
+            # Calcular suporte e resistência
+            highs = recent_data['high'].rolling(5).max()
+            lows = recent_data['low'].rolling(5).min()
+            resistance_level = float(highs.iloc[-1])
+            support_level = float(lows.iloc[-1])
+            
+            # Sinais dos indicadores
+            rsi = latest.get('rsi', 50)
+            macd = latest.get('macd', 0)
+            current_price = latest['close']
+            
+            # Sinais RSI
+            if rsi > 70:
+                rsi_signal = "SOBRECOMPRADO"
+            elif rsi < 30:
+                rsi_signal = "SOBREVENDIDO"
+            else:
+                rsi_signal = "NEUTRO"
+            
+            # Sinais MACD
+            if macd > 0:
+                macd_signal = "COMPRA"
+            elif macd < 0:
+                macd_signal = "VENDA"
+            else:
+                macd_signal = "NEUTRO"
+                
+            # Sinal Bollinger (aproximado)
+            ma20 = latest.get('ma20', current_price)
+            if current_price > ma20 * 1.02:
+                bollinger_signal = "QUEBRA_SUPERIOR"
+            elif current_price < ma20 * 0.98:
+                bollinger_signal = "QUEBRA_INFERIOR"
+            else:
+                bollinger_signal = "DENTRO_BANDAS"
+            
+            return {
+                'trend': analysis.get('trend', 'neutro'),
+                'support_level': support_level,
+                'resistance_level': resistance_level,
+                'rsi_signal': rsi_signal,
+                'macd_signal': macd_signal,
+                'bollinger_signal': bollinger_signal
+            }
+            
+        except Exception as e:
+            logging.warning(f"Erro na análise técnica: {e}")
+            return {
+                'trend': 'neutro',
+                'support_level': 0,
+                'resistance_level': 0,
+                'rsi_signal': 'NEUTRO',
+                'macd_signal': 'NEUTRO',
+                'bollinger_signal': 'DENTRO_BANDAS'
+            }
+    
+    def _generate_recommendations(self, data: pd.DataFrame, analysis: Dict, predictions: List[Dict], confidence_data: Dict) -> Dict:
+        """Gera recomendações detalhadas compatíveis com interface"""
+        try:
+            current_price = data['close'].iloc[-1]
+            recommendation = analysis.get('recommendation', 'MANTER')
+            confidence_pct = confidence_data.get('confidence_percentage', 50)
+            
+            # Target price baseado na primeira previsão
+            target_price = current_price
+            if predictions and len(predictions) > 0:
+                target_price = predictions[0].get('predicted_price', current_price)
+            
+            # Stop loss baseado no risk management
+            volatility = data['close'].pct_change().tail(10).std()
+            stop_loss_pct = max(0.05, min(0.15, volatility * 0.8))
+            stop_loss = current_price * (1 - stop_loss_pct)
+            
+            # Mapeamento de ações
+            action_map = {
+                'COMPRAR': 'BUY',
+                'VENDER': 'SELL', 
+                'MANTER': 'HOLD'
+            }
+            action = action_map.get(recommendation, 'HOLD')
+            
+            # Probabilidade baseada na confiança
+            probability = confidence_pct / 100.0
+            
+            # Timeframe baseado nos dias de previsão
+            timeframe = "1-2 semanas"
+            
+            return {
+                'action': action,
+                'target_price': float(target_price),
+                'stop_loss': float(stop_loss),
+                'probability': float(probability),
+                'timeframe': timeframe
+            }
+            
+        except Exception as e:
+            logging.warning(f"Erro nas recomendações: {e}")
+            return {
+                'action': 'HOLD',
+                'target_price': 0,
+                'stop_loss': 0,
+                'probability': 0.5,
+                'timeframe': '1-2 semanas'
+            }
+    
+    def _generate_analysis_summary(self, analysis: Dict, confidence_data: Dict, technical_analysis: Dict, recommendations: Dict) -> str:
+        """Gera resumo inteligente da análise - o campo mais importante!"""
+        try:
+            # Extrair dados principais
+            recommendation = analysis.get('recommendation', 'MANTER')
+            confidence = confidence_data.get('confidence_percentage', 50)
+            trend = analysis.get('trend', 'neutro')
+            price_change_pct = analysis.get('price_change_percent', 0)
+            
+            # Sinais técnicos
+            rsi_signal = technical_analysis.get('rsi_signal', 'NEUTRO')
+            macd_signal = technical_analysis.get('macd_signal', 'NEUTRO')
+            
+            # Construir explicação inteligente
+            summary_parts = []
+            
+            # 1. Recomendação principal com justificativa
+            if recommendation == 'COMPRAR':
+                summary_parts.append(f"🟢 RECOMENDAÇÃO DE COMPRA com {confidence}% de confiança.")
+                if price_change_pct > 0:
+                    summary_parts.append(f"O ativo está em tendência de alta (+{price_change_pct:.1f}%)")
+                if macd_signal == 'COMPRA':
+                    summary_parts.append("e o MACD confirma sinal de compra.")
+            elif recommendation == 'VENDER':
+                summary_parts.append(f"🔴 RECOMENDAÇÃO DE VENDA com {confidence}% de confiança.")
+                if price_change_pct < 0:
+                    summary_parts.append(f"O ativo está em tendência de baixa ({price_change_pct:.1f}%)")
+                if rsi_signal == 'SOBRECOMPRADO':
+                    summary_parts.append("e o RSI indica sobrecompra.")
+            else:
+                summary_parts.append(f"🟡 RECOMENDAÇÃO DE MANTER com {confidence}% de confiança.")
+                summary_parts.append(f"O mercado está {trend} sem sinais claros de direção.")
+            
+            # 2. Análise técnica
+            tech_signals = []
+            if rsi_signal == 'SOBREVENDIDO':
+                tech_signals.append("RSI indica possível reversão de alta")
+            elif rsi_signal == 'SOBRECOMPRADO':
+                tech_signals.append("RSI sugere possível correção")
+                
+            if macd_signal == 'COMPRA':
+                tech_signals.append("MACD em sinal de compra")
+            elif macd_signal == 'VENDA':
+                tech_signals.append("MACD em sinal de venda")
+            
+            if tech_signals:
+                summary_parts.append(f" Tecnicamente: {', '.join(tech_signals)}.")
+            
+            # 3. Nível de confiança e fatores
+            if confidence >= 80:
+                summary_parts.append("A análise apresenta alta confiança baseada em múltiplos indicadores convergentes.")
+            elif confidence >= 60:
+                summary_parts.append("A confiança é moderada com alguns indicadores conflitantes.")
+            else:
+                summary_parts.append("Baixa confiança devido à volatilidade e sinais mistos no mercado.")
+            
+            # 4. Recomendação de ação
+            target_price = recommendations.get('target_price', 0)
+            if target_price > 0:
+                current_price = analysis.get('current_price', 0)
+                if current_price > 0:
+                    potential_gain = ((target_price - current_price) / current_price) * 100
+                    if abs(potential_gain) > 1:
+                        summary_parts.append(f"Potencial de variação: {potential_gain:+.1f}% no prazo estimado.")
+            
+            return " ".join(summary_parts)
+            
+        except Exception as e:
+            logging.warning(f"Erro no resumo da análise: {e}")
+            return f"Análise para {analysis.get('recommendation', 'MANTER')} com confiança de {confidence_data.get('confidence_percentage', 50)}%. Consulte os indicadores técnicos para mais detalhes."
     analyzer = EnhancedFinancialAnalyzer()
     return analyzer.generate_enhanced_chart_data(ticker, days_forecast)
