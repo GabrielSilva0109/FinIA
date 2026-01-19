@@ -1034,7 +1034,7 @@ class EnhancedFinancialAnalyzer:
         }
     
     def _generate_technical_analysis(self, data: pd.DataFrame, analysis: Dict) -> Dict:
-        """Gera análise técnica detalhada compatível com interface"""
+        """Gera análise técnica ULTRA-DETALHADA com explicações completas dos motivos"""
         try:
             latest = data.iloc[-1]
             recent_data = data.tail(20)
@@ -1045,43 +1045,108 @@ class EnhancedFinancialAnalyzer:
             resistance_level = float(highs.iloc[-1])
             support_level = float(lows.iloc[-1])
             
-            # Sinais dos indicadores
+            # Sinais dos indicadores com explicações
             rsi = latest.get('rsi', 50)
             macd = latest.get('macd', 0)
+            macd_signal_line = latest.get('macd_signal', 0)
             current_price = latest['close']
             
-            # Sinais RSI
+            # RSI com explicações detalhadas
             if rsi > 70:
                 rsi_signal = "SOBRECOMPRADO"
+                rsi_explanation = f"RSI em {rsi:.1f} indica sobrecompra - pressão vendedora esperada"
             elif rsi < 30:
                 rsi_signal = "SOBREVENDIDO"
+                rsi_explanation = f"RSI em {rsi:.1f} indica sobrevenda - possível reversão de alta"
             else:
                 rsi_signal = "NEUTRO"
+                rsi_explanation = f"RSI em {rsi:.1f} está equilibrado - sem pressão extrema"
             
-            # Sinais MACD
-            if macd > 0:
+            # MACD com explicações
+            if macd > macd_signal_line and macd > 0:
+                macd_signal = "COMPRA_FORTE"
+                macd_explanation = f"MACD ({macd:.4f}) acima da linha de sinal - momento de alta confirmado"
+            elif macd > macd_signal_line:
                 macd_signal = "COMPRA"
-            elif macd < 0:
+                macd_explanation = f"MACD cruzando acima da linha de sinal - início de tendência de alta"
+            elif macd < macd_signal_line and macd < 0:
+                macd_signal = "VENDA_FORTE"
+                macd_explanation = f"MACD ({macd:.4f}) abaixo da linha de sinal - momento de baixa confirmado"
+            elif macd < macd_signal_line:
                 macd_signal = "VENDA"
+                macd_explanation = f"MACD cruzando abaixo da linha de sinal - início de tendência de baixa"
             else:
                 macd_signal = "NEUTRO"
+                macd_explanation = f"MACD próximo à linha de sinal - sem direção clara"
                 
-            # Sinal Bollinger (aproximado)
+            # Análise de médias móveis
+            ma7 = latest.get('ma7', current_price)
             ma20 = latest.get('ma20', current_price)
-            if current_price > ma20 * 1.02:
+            ma50 = latest.get('ma50', current_price)
+            
+            # Determinar tendência por médias
+            if current_price > ma7 > ma20 > ma50:
+                trend_strength = "ALTA_FORTE"
+                ma_explanation = "Preço acima de todas as médias - tendência de alta bem definida"
+            elif current_price < ma7 < ma20 < ma50:
+                trend_strength = "BAIXA_FORTE"
+                ma_explanation = "Preço abaixo de todas as médias - tendência de baixa bem definida"
+            elif current_price > ma20:
+                trend_strength = "ALTA_MODERADA"
+                ma_explanation = "Preço acima da média de 20 dias - leve viés de alta"
+            elif current_price < ma20:
+                trend_strength = "BAIXA_MODERADA"
+                ma_explanation = "Preço abaixo da média de 20 dias - leve viés de baixa"
+            else:
+                trend_strength = "LATERAL"
+                ma_explanation = "Preço próximo às médias móveis - movimento lateral"
+                
+            # Bollinger Bands detalhado
+            bb_upper = latest.get('bb_upper', current_price * 1.02)
+            bb_lower = latest.get('bb_lower', current_price * 0.98)
+            bb_position = (current_price - bb_lower) / (bb_upper - bb_lower) if bb_upper != bb_lower else 0.5
+            
+            if current_price > bb_upper:
                 bollinger_signal = "QUEBRA_SUPERIOR"
-            elif current_price < ma20 * 0.98:
+                bb_explanation = f"Preço rompeu Bollinger superior - possível sobrecompra ou força de alta"
+            elif current_price < bb_lower:
                 bollinger_signal = "QUEBRA_INFERIOR"
+                bb_explanation = f"Preço rompeu Bollinger inferior - possível sobrevenda ou força de baixa"
+            elif bb_position > 0.8:
+                bollinger_signal = "TOPO_BANDA"
+                bb_explanation = f"Preço próximo ao topo das Bollinger - atenção para possível reversão"
+            elif bb_position < 0.2:
+                bollinger_signal = "FUNDO_BANDA"
+                bb_explanation = f"Preço próximo ao fundo das Bollinger - possível oportunidade de compra"
             else:
                 bollinger_signal = "DENTRO_BANDAS"
+                bb_explanation = f"Preço dentro das Bollinger ({bb_position*100:.0f}% da banda) - movimento normal"
+            
+            # Análise de volume se disponível
+            volume_analysis = "Volume não disponível"
+            if 'volume' in latest and pd.notna(latest['volume']):
+                avg_volume = data['volume'].tail(10).mean()
+                if latest['volume'] > avg_volume * 1.5:
+                    volume_analysis = "Volume alto confirma movimento"
+                elif latest['volume'] < avg_volume * 0.5:
+                    volume_analysis = "Volume baixo - movimento pode ser fraco"
+                else:
+                    volume_analysis = "Volume normal"
             
             return {
                 'trend': analysis.get('trend', 'neutro'),
+                'trend_strength': trend_strength,
                 'support_level': support_level,
                 'resistance_level': resistance_level,
                 'rsi_signal': rsi_signal,
+                'rsi_value': float(rsi),
+                'rsi_explanation': rsi_explanation,
                 'macd_signal': macd_signal,
-                'bollinger_signal': bollinger_signal
+                'macd_explanation': macd_explanation,
+                'bollinger_signal': bollinger_signal,
+                'bollinger_explanation': bb_explanation,
+                'ma_explanation': ma_explanation,
+                'volume_analysis': volume_analysis
             }
             
         except Exception as e:
